@@ -12,6 +12,7 @@ using StringTools;
 /**
  * Extends haxe.Http to sign the request using AWS IAM Sig V4 before sending.
  * Signature format gathered from here: http://docs.amazonwebservices.com/general/latest/gr/sigv4-create-canonical-request.html
+ * 
  * @author Sam MacPherson
  */
 
@@ -26,6 +27,7 @@ class Sig4Http extends Http {
 	var config:IAMConfig;
 	
 	/**
+	 * Creates a new http connection with Signature V4 authentication.
 	 * 
 	 * @param	url	The AWS end point.
 	 * @param	config	An IAM configuration file.
@@ -202,15 +204,6 @@ class Sig4Http extends Http {
 		} else {
 			super.setParameter("X-Amz-Signature", signature);
 		}
-	}
-	
-	/**
-	 * @inheritDoc
-	 */
-	public override function request (post:Bool):Void {
-		applySigning(post);
-		
-		super.request(post);
 	}
 	
 }

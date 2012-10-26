@@ -21,7 +21,9 @@ typedef PrimaryKey = {
 
 typedef Attribute = Dynamic;
 
-typedef Attributes = Hash<Dynamic>;
+typedef Attributes = Hash<Attribute>;
+
+typedef UpdateAttributes = Hash<{value:Attribute, action:String}>;
 
 /**
  * Response types.
@@ -57,6 +59,10 @@ class Database {
 	static inline var OP_SCAN:String = "Scan";
 	static inline var OP_UPDATE_ITEM:String = "UpdateItem";
 	static inline var OP_UPDATE_TABLE:String = "UpdateTable";
+	
+	static inline var UPDATE_PUT:String = "PUT";
+	static inline var UPDATE_ADD:String = "ADD";
+	static inline var UPDATE_DELETE:String = "DELETE";
 	
 	var config:IAMConfig;
 	
@@ -133,6 +139,15 @@ class Database {
 		for (i in data.keys()) {
 			var val = data.get(i);
 			if (val != null) Reflect.setField(obj, i, mapAttributeValue(val));
+		}
+		return obj;
+	}
+	
+	function mapAttributeUpdates (data:UpdateAttributes):Dynamic {
+		var obj = { };
+		for (i in data.keys()) {
+			var val = data.get(i.value);
+			Reflect.setField(obj, i, { Value: mapKeyValue(val), Action:i.action } );
 		}
 		return obj;
 	}
@@ -283,6 +298,33 @@ class Database {
 		
 		var resp = sendRequest(OP_PUT_ITEM, req);
 		if (returnOld) return buildAttributes(resp.Attributes);
+		else return null;
+	}
+	
+	/**
+	 * Updates an item.
+	 * 
+	 * @param	table	The table name you want to delete an item from.
+	 * @param	key	The hash key for this item. May be just a hash or a hash and a range key.
+	 * @param	attributes	A list of attributes to update on the item.
+	 * @param	?condition	An optional put condition for atomic evaluation.
+	 * @param	?returnNew	true -> Return new records. false -> Return old records. null -> Return nothing.
+	 * @param	?returnUpdated	true -> Return only updated records. false -> Return all records.
+	 * @return	The record attributes or null if returnNew is null.
+	 */
+	public function updateItem (table:String, key:PrimaryKey, attributes:UpdateAttributes, ?condition:Attributes, ?returnNew:Bool, ?returnUpdated:Bool = false):Attributes {
+		var req = { TableName:table, Key:mapKey(key), AttributeUpdates:mapAttributeUpdates(attributes) };
+		if (condition != null) Reflect.setField(req, "Expected", mapConditional(condition));
+		if (returnNew == true) {
+			if (returnUpdated) Reflect.setField(req, "ReturnValues", "UPDATED_NEW");
+			else Reflect.setField(req, "ReturnValues", "ALL_NEW");
+		} else if (returnNew == false) {
+			if (returnUpdated) Reflect.setField(req, "ReturnValues", "UPDATED_OLD");
+			else Reflect.setField(req, "ReturnValues", "ALL_OLD");
+		}
+		
+		var resp = sendRequest(OP_PUT_ITEM, req);
+		if (returnNew != null) return buildAttributes(resp.Attributes);
 		else return null;
 	}
 	
