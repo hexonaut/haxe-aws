@@ -23,7 +23,7 @@ typedef Attribute = Dynamic;
 
 typedef Attributes = Hash<Attribute>;
 
-typedef UpdateAttributes = Hash<{value:Attribute, action:String}>;
+typedef UpdateAttributes = Hash<{value:Attribute, ?action:String}>;
 
 /**
  * Response types.
@@ -60,9 +60,9 @@ class Database {
 	static inline var OP_UPDATE_ITEM:String = "UpdateItem";
 	static inline var OP_UPDATE_TABLE:String = "UpdateTable";
 	
-	static inline var UPDATE_PUT:String = "PUT";
-	static inline var UPDATE_ADD:String = "ADD";
-	static inline var UPDATE_DELETE:String = "DELETE";
+	public static inline var UPDATE_PUT:String = "PUT";
+	public static inline var UPDATE_ADD:String = "ADD";
+	public static inline var UPDATE_DELETE:String = "DELETE";
 	
 	var config:IAMConfig;
 	
@@ -146,8 +146,10 @@ class Database {
 	function mapAttributeUpdates (data:UpdateAttributes):Dynamic {
 		var obj = { };
 		for (i in data.keys()) {
-			var val = data.get(i.value);
-			Reflect.setField(obj, i, { Value: mapKeyValue(val), Action:i.action } );
+			var val = data.get(i);
+			var attrib = { Value: mapAttributeValue(val.value) };
+			if (val.action != null) Reflect.setField(attrib, "Action", val.action);
+			Reflect.setField(obj, i, attrib);
 		}
 		return obj;
 	}
@@ -157,7 +159,7 @@ class Database {
 		for (i in condition.keys()) {
 			var val = condition.get(i);
 			if (val == null) Reflect.setField(obj, i, { Exists: false } );
-			else Reflect.setField(obj, i, { Value: mapKeyValue(val) } );
+			else Reflect.setField(obj, i, { Value: mapAttributeValue(val) } );
 		}
 		return obj;
 	}
@@ -323,7 +325,7 @@ class Database {
 			else Reflect.setField(req, "ReturnValues", "ALL_OLD");
 		}
 		
-		var resp = sendRequest(OP_PUT_ITEM, req);
+		var resp = sendRequest(OP_UPDATE_ITEM, req);
 		if (returnNew != null) return buildAttributes(resp.Attributes);
 		else return null;
 	}
