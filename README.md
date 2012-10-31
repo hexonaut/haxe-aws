@@ -11,7 +11,7 @@ Usage is fairly straight forward. Here is an example with DynamoDB:
 		trace("Found table: " + i);
 		
 		//Add item to the table
-		var item = new Attributes();
+		var item = new com.amazonaws.dynamodb.Database.Attributes();
 		item.set("MYPRIMARYHASHKEY", 0);
 		db.putItem(i, item);
 		

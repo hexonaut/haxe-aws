@@ -25,6 +25,8 @@ typedef Attributes = Hash<Attribute>;
 
 typedef UpdateAttributes = Hash<{value:Attribute, ?action:String}>;
 
+typedef ComparisonFunction = { values:Array<Dynamic>, op:String };
+
 /**
  * Response types.
  */
@@ -63,6 +65,23 @@ class Database {
 	public static inline var UPDATE_PUT:String = "PUT";
 	public static inline var UPDATE_ADD:String = "ADD";
 	public static inline var UPDATE_DELETE:String = "DELETE";
+	
+	//Query operators
+	public static inline var OP_EQ:String = "EQ";
+	public static inline var OP_LE:String = "LE";
+	public static inline var OP_LT:String = "LT";
+	public static inline var OP_GE:String = "GE";
+	public static inline var OP_GT:String = "GT";
+	public static inline var OP_BEGINS_WITH:String = "BEGINS_WITH";
+	public static inline var OP_BETWEEN:String = "BETWEEN";
+	
+	//Scan operators
+	public static inline var OP_NE:String = "NE";
+	public static inline var OP_NOT_NULL:String = "NOT_NULL";
+	public static inline var OP_NULL:String = "NULL";
+	public static inline var OP_CONTAINS:String = "CONTAINS";
+	public static inline var OP_NOT_CONTAINS:String = "NOT_CONTAINS";
+	public static inline var OP_IN:String = "IN";
 	
 	var config:IAMConfig;
 	
@@ -164,6 +183,14 @@ class Database {
 		return obj;
 	}
 	
+	function mapComparisonFunction (comp:ComparisonFunction):Dynamic {
+		var attribValueList = new Array<Dynamic>();
+		for (i in comp.values) {
+			attribValueList.push(mapAttributeValue(i));
+		}
+		return { AttributeValueList:attribValueList, ComparisonOperator:comp.op };
+	}
+	
 	function buildKeyValue (data:Dynamic):Dynamic {
 		var field = Reflect.fields(data)[0];
 		switch (field) {
@@ -252,7 +279,7 @@ class Database {
 		for (i in Reflect.fields(resp.Responses)) {
 			if (i != "UnprocessedKeys") {
 				var field = Reflect.field(resp.Responses, i);
-				tables.set(i, new BatchedCollection(buildCollectionItems(field.Items), field.ConsumedCapacityUnits));
+				tables.set(i, new BatchedCollection(this, buildCollectionItems(field.Items), field.ConsumedCapacityUnits));
 			}
 		}
 		if (resp.Responses.UnprocessedKeys != null) {
@@ -301,6 +328,74 @@ class Database {
 		var resp = sendRequest(OP_PUT_ITEM, req);
 		if (returnOld) return buildAttributes(resp.Attributes);
 		else return null;
+	}
+	
+	/**
+	 * Queries a table for a collection of results from some specific Hash Key. Requires a Hash Key + Range Key table.
+	 * 
+	 * @param	table	The table name.
+	 * @param	hashKey	The hash key portion of the primary key.
+	 * @param	?rangeKeyComparisonFunction	A combination of values to compare and the operator to apply. The value list should just be 1 value for everything except the BETWEEN operator.
+	 * @param	?attributesToGet	A list of attributes to get. Leave null if you want all attributes or if doing a count.
+	 * @param	?limit	Stop after this number of results.
+	 * @param	?count	If true then the result will only contain the number of items and not the attributes.
+	 * @param	?scanForward	Ascending order or descending.
+	 * @param	?consistantRead	Will only return consistant reads. Setting this to true uses 2x as many capacity units per query.
+	 * @param	?exclusiveStartKey	Will start the search from the element immediately proceeding this one.
+	 * @return	A collection containing the matched items.
+	 */
+	public function query (table:String, hashKey:Dynamic, ?rangeKeyComparisonFunction:ComparisonFunction, ?attributesToGet:Attributes, ?limit:Int, ?count:Bool = false, ?scanForward:Bool = true, ?consistantRead:Bool = false, ?exclusiveStartKey:PrimaryKey):Collection {
+		var req = { TableName:table, HashKeyValue:mapKeyValue(hashKey), Count:count, ScanIndexForward:scanForward, ConsistentRead:consistantRead };
+		if (rangeKeyComparisonFunction != null) Reflect.setField(req, "RangeKeyCondition", mapComparisonFunction(rangeKeyComparisonFunction));
+		if (attributesToGet != null) Reflect.setField(req, "AttributesToGet", mapAttributes(attributesToGet));
+		if (limit != null) Reflect.setField(req, "Limit", limit);
+		if (exclusiveStartKey != null) Reflect.setField(req, "ExclusiveStartKey", mapKey(exclusiveStartKey));
+		
+		var resp = sendRequest(OP_QUERY, req);
+		var coll = new QueryScanCollection(this, buildCollectionItems(resp.Items), resp.ConsumedCapacityUnits, table, false, resp.Count, resp.LastEvaluatedKey != null ? buildKey(resp.LastEvaluatedKey) : null);
+		coll.hashKey = hashKey;
+		coll.comparisonFunction = rangeKeyComparisonFunction;
+		coll.attributesToGet = attributesToGet;
+		coll._limit = limit;
+		coll.countRequest = count;
+		coll.scanForward = scanForward;
+		coll.consistantRead = consistantRead;
+		return coll;
+	}
+	
+	/**
+	 * Scans a table for items that match the given filter.
+	 * 
+	 * @param	table	The table name.
+	 * @param	?filters	An attribute-name mapped list of filters you want to apply to the results.
+	 * @param	?attributesToGet	A list of attributes to get. Leave null if you want all attributes or if doing a count.
+	 * @param	?limit	Stop after this number of results.
+	 * @param	?useScannedLimit	Set whether you want to the collection to be considered complete when count == limit (false) or when scannedCount == limit (true).
+	 * @param	?count	If true then the result will only contain the number of items and not the attributes.
+	 * @param	?exclusiveStartKey	Will start the search from the element immediately proceeding this one.
+	 * @return	A collection containing the matched items.
+	 */
+	public function scan (table:String, ?filters:Hash<ComparisonFunction>, ?attributesToGet:Attributes, ?limit:Int, ?useScannedLimit:Bool = false, ?count:Bool = false, ?exclusiveStartKey:PrimaryKey):Collection {
+		var req = { TableName:table, Count:count };
+		if (filters != null) {
+			var scanFilters = { };
+			for (i in filters.keys()) {
+				Reflect.setField(scanFilters, i, mapComparisonFunction(filters.get(i)));
+			}
+			Reflect.setField(req, "ScanFilter", scanFilters);
+		}
+		if (attributesToGet != null) Reflect.setField(req, "AttributesToGet", mapAttributes(attributesToGet));
+		if (limit != null) Reflect.setField(req, "Limit", limit);
+		if (exclusiveStartKey != null) Reflect.setField(req, "ExclusiveStartKey", mapKey(exclusiveStartKey));
+		
+		var resp = sendRequest(OP_SCAN, req);
+		var coll = new QueryScanCollection(this, buildCollectionItems(resp.Items), resp.ConsumedCapacityUnits, table, true, resp.Count, resp.LastEvaluatedKey != null ? buildKey(resp.LastEvaluatedKey) : null);
+		coll.filters = filters;
+		coll.attributesToGet = attributesToGet;
+		coll._limit = limit;
+		coll.useScannedLimit = useScannedLimit;
+		coll.countRequest = count;
+		return coll;
 	}
 	
 	/**
