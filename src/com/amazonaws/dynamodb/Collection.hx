@@ -79,6 +79,16 @@ class Collection {
 		consumedCapacityUnits += consumedCapacityUnits;
 	}
 	
+	/**
+	 * Return the item at index.
+	 * 
+	 * @param	index	The index to look at.
+	 * @return	The attributes for that index.
+	 */
+	public function get (index:Int):Attributes {
+		return items[index];
+	}
+	
 }
 
 class BatchedCollection extends Collection {
