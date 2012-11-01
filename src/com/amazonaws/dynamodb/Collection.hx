@@ -112,7 +112,7 @@ class QueryScanCollection extends Collection {
 	public var _scannedCount:Int;
 	public var _limit:Int;
 	public var useScannedLimit:Bool;
-	public var attributesToGet:Attributes;
+	public var attributesToGet:Array<String>;
 	public var hashKey:Dynamic;
 	public var comparisonFunction:ComparisonFunction;
 	public var filters:Hash<ComparisonFunction>;

@@ -7,6 +7,7 @@ import haxe.BaseCode;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import haxe.Json;
+import sys.net.Socket;
 
 using DateTools;
 
@@ -312,6 +313,39 @@ class Database {
 	}
 	
 	/**
+	 * Lookup an item based on the primary key.
+	 * 
+	 * @param	table	The table to look in.
+	 * @param	key	The primary key for this item
+	 * @param	?attributesToGet	A list of attributes to look. If not specified then all attributes are retrieved.
+	 * @param	?consistantRead	Set whether the database should use consistant reads. Setting this to true uses 2x as many capacity units.
+	 * @return	The attributes for this item.
+	 */
+	public function getItem (table:String, key:PrimaryKey, ?attributesToGet:Array<String>, ?consistantRead:Bool = false):Attributes {
+		var req = { TableName:table, Key:mapKey(key), ConsistentRead:consistantRead }
+		if (attributesToGet != null) Reflect.setField(req, "AttributesToGet", attributesToGet);
+		
+		var resp = sendRequest(OP_GET_ITEM, req);
+		return buildAttributes(resp.Item);
+	}
+	
+	/**
+	 * List all tables in the database.
+	 * 
+	 * @param	?limit	An optional upper limit to stop at.
+	 * @param	?exclusiveStartTableName	Start at this table name.
+	 * @return	A list of table names and potentially a lastEvaluatedTableName if the request didn't finish.
+	 */
+	public function listTables (?limit:Int, ?exclusiveStartTableName:String):ListTablesResponse {
+		var req = { };
+		if (limit != null) Reflect.setField(req, "Limit", limit);
+		if (exclusiveStartTableName != null) Reflect.setField(req, "ExclusiveStartTableName", exclusiveStartTableName);
+		
+		var resp = sendRequest(OP_LIST_TABLES, req);
+		return { tableNames:resp.TableNames, lastEvaluatedTableName:resp.LastEvaluatedTableName };
+	}
+	
+	/**
 	 * Inserts a new item into the database.
 	 * 
 	 * @param	table	The table name you want to delete an item from.
@@ -344,10 +378,10 @@ class Database {
 	 * @param	?exclusiveStartKey	Will start the search from the element immediately proceeding this one.
 	 * @return	A collection containing the matched items.
 	 */
-	public function query (table:String, hashKey:Dynamic, ?rangeKeyComparisonFunction:ComparisonFunction, ?attributesToGet:Attributes, ?limit:Int, ?count:Bool = false, ?scanForward:Bool = true, ?consistantRead:Bool = false, ?exclusiveStartKey:PrimaryKey):Collection {
+	public function query (table:String, hashKey:Dynamic, ?rangeKeyComparisonFunction:ComparisonFunction, ?attributesToGet:Array<String>, ?limit:Int, ?count:Bool = false, ?scanForward:Bool = true, ?consistantRead:Bool = false, ?exclusiveStartKey:PrimaryKey):Collection {
 		var req = { TableName:table, HashKeyValue:mapKeyValue(hashKey), Count:count, ScanIndexForward:scanForward, ConsistentRead:consistantRead };
 		if (rangeKeyComparisonFunction != null) Reflect.setField(req, "RangeKeyCondition", mapComparisonFunction(rangeKeyComparisonFunction));
-		if (attributesToGet != null) Reflect.setField(req, "AttributesToGet", mapAttributes(attributesToGet));
+		if (attributesToGet != null) Reflect.setField(req, "AttributesToGet", attributesToGet);
 		if (limit != null) Reflect.setField(req, "Limit", limit);
 		if (exclusiveStartKey != null) Reflect.setField(req, "ExclusiveStartKey", mapKey(exclusiveStartKey));
 		
@@ -375,7 +409,7 @@ class Database {
 	 * @param	?exclusiveStartKey	Will start the search from the element immediately proceeding this one.
 	 * @return	A collection containing the matched items.
 	 */
-	public function scan (table:String, ?filters:Hash<ComparisonFunction>, ?attributesToGet:Attributes, ?limit:Int, ?useScannedLimit:Bool = false, ?count:Bool = false, ?exclusiveStartKey:PrimaryKey):Collection {
+	public function scan (table:String, ?filters:Hash<ComparisonFunction>, ?attributesToGet:Array<String>, ?limit:Int, ?useScannedLimit:Bool = false, ?count:Bool = false, ?exclusiveStartKey:PrimaryKey):Collection {
 		var req = { TableName:table, Count:count };
 		if (filters != null) {
 			var scanFilters = { };
@@ -384,7 +418,7 @@ class Database {
 			}
 			Reflect.setField(req, "ScanFilter", scanFilters);
 		}
-		if (attributesToGet != null) Reflect.setField(req, "AttributesToGet", mapAttributes(attributesToGet));
+		if (attributesToGet != null) Reflect.setField(req, "AttributesToGet", attributesToGet);
 		if (limit != null) Reflect.setField(req, "Limit", limit);
 		if (exclusiveStartKey != null) Reflect.setField(req, "ExclusiveStartKey", mapKey(exclusiveStartKey));
 		
@@ -423,22 +457,6 @@ class Database {
 		var resp = sendRequest(OP_UPDATE_ITEM, req);
 		if (returnNew != null) return buildAttributes(resp.Attributes);
 		else return null;
-	}
-	
-	/**
-	 * List all tables in the database.
-	 * 
-	 * @param	?limit	An optional upper limit to stop at.
-	 * @param	?exclusiveStartTableName	Start at this table name.
-	 * @return	A list of table names and potentially a lastEvaluatedTableName if the request didn't finish.
-	 */
-	public function listTables (?limit:Int, ?exclusiveStartTableName:String):ListTablesResponse {
-		var req = { };
-		if (limit != null) Reflect.setField(req, "Limit", limit);
-		if (exclusiveStartTableName != null) Reflect.setField(req, "ExclusiveStartTableName", exclusiveStartTableName);
-		
-		var resp = sendRequest(OP_LIST_TABLES, req);
-		return { tableNames:resp.TableNames, lastEvaluatedTableName:resp.LastEvaluatedTableName };
 	}
 	
 	function sendRequest (operation:String, payload:Dynamic):Dynamic {
