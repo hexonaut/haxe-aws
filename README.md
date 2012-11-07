@@ -7,14 +7,27 @@ Usage is fairly straight forward. Here is an example with DynamoDB:
 
     var config = new com.amazonaws.auth.IAMConfig("dynamodb.us-east-1.amazonaws.com", "MYACCESSKEY", "MYSECRETKEY", "us-east-1", "dynamodb");
     var db = new com.amazonaws.dynamodb.Database(config);
-	for (i in db.listTables().tableNames) {
-		trace("Found table: " + i);
-		
-		//Add item to the table
-		var item = new com.amazonaws.dynamodb.Database.Attributes();
-		item.set("MYPRIMARYHASHKEY", 0);
-		db.putItem(i, item);
-		
-		//And delete the item
-		db.deleteItem(i, { hash:0 });
+	
+	//Add 3 items to myTable
+	db.putItem("myTable", {id:0, rangeid:0 someVar:"Haxe Rocks!"});
+	db.putItem("myTable", {id:0, rangeid:1, someVar:"Haxe really Rocks!"});
+	db.putItem("myTable", {id:1, rangeid:0, someBinaryVar:haxe.io.Bytes.ofString("DynamoDB supports binary data too!")});
+	
+	//Print the second items 'someVar' attribute
+	trace(db.getItem("myTable", {id:0, rangeid:1}).someVar);	//Will print "Haxe really Rocks!"
+	
+	
+	//Scan myTable
+	for (i in new Collection(db, "myTable")) {
+		trace(i);
+	}
+	
+	//Query myTable for items with hash key 0
+	for (i in new Collection(db, "myTable", 0)) {
+		trace(i);
+	}
+	
+	//Query myTable for items with hash key 0 but limit to the first result
+	for (i in new Collection(db, "myTable", 0, {limit:1})) {
+		trace(i);
 	}

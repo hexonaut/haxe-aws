@@ -3,6 +3,7 @@ package com.amazonaws.dynamodb;
 import com.amazonaws.auth.IAMConfig;
 import com.amazonaws.auth.Sig4Http;
 import com.amazonaws.dynamodb.Collection;
+import com.amazonaws.dynamodb.DynamoDBError;
 import haxe.BaseCode;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
@@ -22,11 +23,13 @@ typedef PrimaryKey = {
 
 typedef Attribute = Dynamic;
 
-typedef Attributes = Hash<Attribute>;
+typedef Attributes = Dynamic<Attribute>;
 
 typedef UpdateAttributes = Hash<{value:Attribute, ?action:String}>;
 
 typedef ComparisonFunction = { values:Array<Dynamic>, op:String };
+
+typedef QueryScanResult = { count:Int, items:Array<Attributes>, consumedCapacityUnits:Int, ?lastEvaluatedKey:PrimaryKey, ?scannedCount:Int };
 
 /**
  * Response types.
@@ -156,8 +159,8 @@ class Database {
 	
 	function mapAttributes (data:Attributes):Dynamic {
 		var obj = { };
-		for (i in data.keys()) {
-			var val = data.get(i);
+		for (i in Reflect.fields(data)) {
+			var val = Reflect.field(data, i);
 			if (val != null) Reflect.setField(obj, i, mapAttributeValue(val));
 		}
 		return obj;
@@ -176,8 +179,8 @@ class Database {
 	
 	function mapConditional (condition:Attributes):Dynamic {
 		var obj = { };
-		for (i in condition.keys()) {
-			var val = condition.get(i);
+		for (i in Reflect.fields(condition)) {
+			var val = Reflect.field(condition, i);
 			if (val == null) Reflect.setField(obj, i, { Exists: false } );
 			else Reflect.setField(obj, i, { Value: mapAttributeValue(val) } );
 		}
@@ -249,10 +252,10 @@ class Database {
 	}
 	
 	function buildAttributes (data:Dynamic):Attributes {
-		var attribs = new Attributes();
+		var attribs = {};
 		for (i in Reflect.fields(data)) {
 			var field = Reflect.field(data, i);
-			if (field != null) attribs.set(i, buildAttribute(field));
+			if (field != null) Reflect.setField(attribs, i, buildAttribute(field));
 		}
 		return attribs;
 	}
@@ -265,7 +268,7 @@ class Database {
 		return items;
 	}
 	
-	public function batchGetItems (requestItems:Hash<{keys:Array<PrimaryKey>, ?attributesToGet:Array<String>}>):Hash<Collection> {
+	/*public function batchGetItems (requestItems:Hash<{keys:Array<PrimaryKey>, ?attributesToGet:Array<String>}>):Hash<Collection> {
 		var req = { };
 		for (i in requestItems.keys()) {
 			var item = requestItems.get(i);
@@ -291,7 +294,7 @@ class Database {
 			}
 		}
 		return tables;
-	}
+	}*/
 	
 	/**
 	 * Delete an item from the database.
@@ -371,30 +374,24 @@ class Database {
 	 * @param	hashKey	The hash key portion of the primary key.
 	 * @param	?rangeKeyComparisonFunction	A combination of values to compare and the operator to apply. The value list should just be 1 value for everything except the BETWEEN operator.
 	 * @param	?attributesToGet	A list of attributes to get. Leave null if you want all attributes or if doing a count.
-	 * @param	?limit	Stop after this number of results.
+	 * @param	?limit	Stop after this number of results. 0 means unlimited.
 	 * @param	?count	If true then the result will only contain the number of items and not the attributes.
 	 * @param	?scanForward	Ascending order or descending.
 	 * @param	?consistantRead	Will only return consistant reads. Setting this to true uses 2x as many capacity units per query.
 	 * @param	?exclusiveStartKey	Will start the search from the element immediately proceeding this one.
-	 * @return	A collection containing the matched items.
+	 * @return	A list of results as well as some meta data.
 	 */
-	public function query (table:String, hashKey:Dynamic, ?rangeKeyComparisonFunction:ComparisonFunction, ?attributesToGet:Array<String>, ?limit:Int, ?count:Bool = false, ?scanForward:Bool = true, ?consistantRead:Bool = false, ?exclusiveStartKey:PrimaryKey):Collection {
+	public function query (table:String, hashKey:Dynamic, ?rangeKeyComparisonFunction:ComparisonFunction, ?attributesToGet:Array<String>, ?limit:Int = 0, ?count:Bool = false, ?scanForward:Bool = true, ?consistantRead:Bool = false, ?exclusiveStartKey:PrimaryKey):QueryScanResult {
 		var req = { TableName:table, HashKeyValue:mapKeyValue(hashKey), Count:count, ScanIndexForward:scanForward, ConsistentRead:consistantRead };
 		if (rangeKeyComparisonFunction != null) Reflect.setField(req, "RangeKeyCondition", mapComparisonFunction(rangeKeyComparisonFunction));
 		if (attributesToGet != null) Reflect.setField(req, "AttributesToGet", attributesToGet);
-		if (limit != null) Reflect.setField(req, "Limit", limit);
+		if (limit != 0) Reflect.setField(req, "Limit", limit);
 		if (exclusiveStartKey != null) Reflect.setField(req, "ExclusiveStartKey", mapKey(exclusiveStartKey));
 		
 		var resp = sendRequest(OP_QUERY, req);
-		var coll = new QueryScanCollection(this, buildCollectionItems(resp.Items), resp.ConsumedCapacityUnits, table, false, resp.Count, resp.LastEvaluatedKey != null ? buildKey(resp.LastEvaluatedKey) : null);
-		coll.hashKey = hashKey;
-		coll.comparisonFunction = rangeKeyComparisonFunction;
-		coll.attributesToGet = attributesToGet;
-		coll._limit = limit;
-		coll.countRequest = count;
-		coll.scanForward = scanForward;
-		coll.consistantRead = consistantRead;
-		return coll;
+		var result = { count:resp.Count, items:buildCollectionItems(resp.Items), consumedCapacityUnits:resp.ConsumedCapacityUnits };
+		if (resp.LastEvaluatedKey != null) Reflect.setField(result, "lastEvaluatedKey", buildKey(resp.LastEvaluatedKey));
+		return result;
 	}
 	
 	/**
@@ -403,13 +400,12 @@ class Database {
 	 * @param	table	The table name.
 	 * @param	?filters	An attribute-name mapped list of filters you want to apply to the results.
 	 * @param	?attributesToGet	A list of attributes to get. Leave null if you want all attributes or if doing a count.
-	 * @param	?limit	Stop after this number of results.
-	 * @param	?useScannedLimit	Set whether you want to the collection to be considered complete when count == limit (false) or when scannedCount == limit (true).
+	 * @param	?scanLimit	Stop after this number of results have been scanned (not necessarily returned). 0 means unlimited.
 	 * @param	?count	If true then the result will only contain the number of items and not the attributes.
 	 * @param	?exclusiveStartKey	Will start the search from the element immediately proceeding this one.
-	 * @return	A collection containing the matched items.
+	 * @return	A list of results as well as some meta data.
 	 */
-	public function scan (table:String, ?filters:Hash<ComparisonFunction>, ?attributesToGet:Array<String>, ?limit:Int, ?useScannedLimit:Bool = false, ?count:Bool = false, ?exclusiveStartKey:PrimaryKey):Collection {
+	public function scan (table:String, ?filters:Hash<ComparisonFunction>, ?attributesToGet:Array<String>, ?scanLimit:Int = 0, ?count:Bool = false, ?exclusiveStartKey:PrimaryKey):QueryScanResult {
 		var req = { TableName:table, Count:count };
 		if (filters != null) {
 			var scanFilters = { };
@@ -419,17 +415,13 @@ class Database {
 			Reflect.setField(req, "ScanFilter", scanFilters);
 		}
 		if (attributesToGet != null) Reflect.setField(req, "AttributesToGet", attributesToGet);
-		if (limit != null) Reflect.setField(req, "Limit", limit);
+		if (scanLimit != 0) Reflect.setField(req, "Limit", scanLimit);
 		if (exclusiveStartKey != null) Reflect.setField(req, "ExclusiveStartKey", mapKey(exclusiveStartKey));
 		
 		var resp = sendRequest(OP_SCAN, req);
-		var coll = new QueryScanCollection(this, buildCollectionItems(resp.Items), resp.ConsumedCapacityUnits, table, true, resp.Count, resp.LastEvaluatedKey != null ? buildKey(resp.LastEvaluatedKey) : null);
-		coll.filters = filters;
-		coll.attributesToGet = attributesToGet;
-		coll._limit = limit;
-		coll.useScannedLimit = useScannedLimit;
-		coll.countRequest = count;
-		return coll;
+		var result = { count:resp.Count, items:buildCollectionItems(resp.Items), consumedCapacityUnits:resp.ConsumedCapacityUnits, scannedCount:resp.ScannedCount };
+		if (resp.LastEvaluatedKey != null) Reflect.setField(result, "lastEvaluatedKey", buildKey(resp.LastEvaluatedKey));
+		return result;
 	}
 	
 	/**
@@ -459,6 +451,17 @@ class Database {
 		else return null;
 	}
 	
+	function formatError (type:String, message:String):Void {
+		var type = type.substr(type.indexOf("#") + 1);
+		var message = message;
+		
+		if (type == "ProvisionedThroughputExceededException") {
+			throw ProvisionedThroughputExceeded;
+		} else {
+			throw "Error: " + type + "\nMessage: " + message;
+		}
+	}
+	
 	function sendRequest (operation:String, payload:Dynamic):Dynamic {
 		var conn = new Sig4Http((config.ssl ? "https" : "http") + "://" + config.host + "/", config);
 		
@@ -475,7 +478,7 @@ class Database {
 		conn.applySigning(true);
 		conn.customRequest(true, data);
 		var out = Json.parse(data.getBytes().toString());
-		if (err != null) throw "Http Error: " + err + "\nAWS Error: " + out.__type + "\nMessage: " + out.message;
+		if (err != null) formatError(out.__type, out.message);
 		return out;
 	}
 	
