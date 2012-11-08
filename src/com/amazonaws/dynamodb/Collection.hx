@@ -107,7 +107,7 @@ class Collection {
 				try {
 					if (hashKey != null) result = db.query(table, hashKey, rangeKeyComparisonFunction, attributesToGet, limit, doCount, scanForward, consistantRead, lastEvaluatedKey);
 					else result = db.scan(table, filters, attributesToGet, scanLimit, doCount, lastEvaluatedKey);
-				} catch (e:DynamoDBError) {
+				} catch (e:DynamoDBException) {
 					if (result == null) {
 						if (delay > AUTO_RETRIES_UPPER_LIMIT) throw "Failed to retrieve items from database.";
 						

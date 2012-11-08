@@ -453,15 +453,19 @@ class Database {
 		else return null;
 	}
 	
-	function formatError (type:String, message:String):Void {
+	function formatError (httpCode:Int, type:String, message:String):Void {
 		var type = type.substr(type.indexOf("#") + 1);
 		var message = message;
 		
-		if (type == "ProvisionedThroughputExceededException") {
-			throw ProvisionedThroughputExceeded;
-		} else {
-			throw "Error: " + type + "\nMessage: " + message;
+		if (httpCode == 413) throw RequestTooLarge;
+		for (i in Type.getEnumConstructs(DynamoDBError)) {
+			if (type == i) throw Type.createEnum(DynamoDBError, i);
 		}
+		for (i in Type.getEnumConstructs(DynamoDBException)) {
+			if (type == i) throw Type.createEnum(DynamoDBException, i);
+		}
+		
+		throw "Error: " + type + "\nMessage: " + message;
 	}
 	
 	function sendRequest (operation:String, payload:Dynamic):Dynamic {
@@ -480,7 +484,7 @@ class Database {
 		conn.applySigning(true);
 		conn.customRequest(true, data);
 		var out = Json.parse(data.getBytes().toString());
-		if (err != null) formatError(out.__type, out.message);
+		if (err != null) formatError(Std.parseInt(err.substr(err.indexOf("#") + 1)), out.__type, out.message);
 		return out;
 	}
 	
