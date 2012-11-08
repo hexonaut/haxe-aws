@@ -42,7 +42,7 @@ class Collection {
 	 * @param	?hashKey	If provided then a query will be performed on this key. If not then the whole database will be scanned.
 	 * @param	?options	Additional parameters.
 	 */
-	public function new (db:Database, table:String, ?hashKey:Dynamic, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }) {
+	public function new (db:Database, table:String, ?hashKey:Dynamic, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }, ?lastEvaluatedKey:PrimaryKey) {
 		this.db = db;
 		this.table = table;
 		this.hashKey = hashKey;
@@ -51,6 +51,7 @@ class Collection {
 		this.tail = null;
 		this.counted = 0;
 		this.doCount = false;
+		this.lastEvaluatedKey = lastEvaluatedKey;
 		this.delay = 1;
 		this.metrics = { consumedCapacityUnits:0, count:0, scannedCount:0 };
 		
@@ -78,9 +79,10 @@ class Collection {
 	 * @param	table	The table you want to query.
 	 * @param	hashKey	The hash key to query on.
 	 * @param	?options	Additional parameters.
+	 * @return	A collection.
 	 */
-	public static function query (db:Database, table:String, hashKey:Dynamic, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }):Collection {
-		return new Collection(db, table, hashKey, options);
+	public static function query (db:Database, table:String, hashKey:Dynamic, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }, ?lastEvaluatedKey:PrimaryKey):Collection {
+		return new Collection(db, table, hashKey, options, lastEvaluatedKey);
 	}
 	
 	
@@ -90,9 +92,10 @@ class Collection {
 	 * @param	db	A reference to the database.
 	 * @param	table	The table you want to scan.
 	 * @param	?options	Additional parameters.
+	 * @return	A collection.
 	 */
-	public static function scan (db:Database, table:String, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }):Collection {
-		return new Collection(db, table, null, options);
+	public static function scan (db:Database, table:String, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }, ?lastEvaluatedKey:PrimaryKey):Collection {
+		return new Collection(db, table, null, options, lastEvaluatedKey);
 	}
 	
 	function queryMoreItems ():Void {
