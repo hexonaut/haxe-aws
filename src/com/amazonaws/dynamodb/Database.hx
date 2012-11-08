@@ -23,7 +23,7 @@ typedef PrimaryKey = {
 
 typedef Attribute = Dynamic;
 
-typedef Attributes = Dynamic<Attribute>;
+typedef Attributes = Dynamic;
 
 typedef UpdateAttributes = Hash<{value:Attribute, ?action:String}>;
 
