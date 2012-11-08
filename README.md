@@ -16,18 +16,20 @@ Usage is fairly straight forward. Here is an example with DynamoDB:
 	//Print the second items 'someVar' attribute
 	trace(db.getItem("myTable", {id:0, rangeid:1}).someVar);	//Will print "Haxe really Rocks!"
 	
+	//Count the number of items in myTable
+	trace(Collection.scan(db, "myTable").count());		//Will print "3"
 	
 	//Scan myTable
-	for (i in new Collection(db, "myTable")) {
+	for (i in Collection.scan(db, "myTable")) {
 		trace(i);
 	}
 	
 	//Query myTable for items with hash key 0
-	for (i in new Collection(db, "myTable", 0)) {
+	for (i in Collection.query(db, "myTable", 0)) {
 		trace(i);
 	}
 	
 	//Query myTable for items with hash key 0 but limit to the first result
-	for (i in new Collection(db, "myTable", 0, {limit:1})) {
+	for (i in Collection.query(db, "myTable", 0, {limit:1})) {
 		trace(i);
 	}

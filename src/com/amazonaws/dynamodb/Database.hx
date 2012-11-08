@@ -29,7 +29,7 @@ typedef UpdateAttributes = Hash<{value:Attribute, ?action:String}>;
 
 typedef ComparisonFunction = { values:Array<Dynamic>, op:String };
 
-typedef QueryScanResult = { count:Int, items:Array<Attributes>, consumedCapacityUnits:Int, ?lastEvaluatedKey:PrimaryKey, ?scannedCount:Int };
+typedef QueryScanResult = { count:Int, consumedCapacityUnits:Int, ?items:Array<Attributes>, ?lastEvaluatedKey:PrimaryKey, ?scannedCount:Int };
 
 /**
  * Response types.
@@ -379,7 +379,7 @@ class Database {
 	 * @param	?scanForward	Ascending order or descending.
 	 * @param	?consistantRead	Will only return consistant reads. Setting this to true uses 2x as many capacity units per query.
 	 * @param	?exclusiveStartKey	Will start the search from the element immediately proceeding this one.
-	 * @return	A list of results as well as some meta data.
+	 * @return	A list of results as well as some meta data. If count is true then only returns meta data.
 	 */
 	public function query (table:String, hashKey:Dynamic, ?rangeKeyComparisonFunction:ComparisonFunction, ?attributesToGet:Array<String>, ?limit:Int = 0, ?count:Bool = false, ?scanForward:Bool = true, ?consistantRead:Bool = false, ?exclusiveStartKey:PrimaryKey):QueryScanResult {
 		var req = { TableName:table, HashKeyValue:mapKeyValue(hashKey), Count:count, ScanIndexForward:scanForward, ConsistentRead:consistantRead };
@@ -389,7 +389,8 @@ class Database {
 		if (exclusiveStartKey != null) Reflect.setField(req, "ExclusiveStartKey", mapKey(exclusiveStartKey));
 		
 		var resp = sendRequest(OP_QUERY, req);
-		var result = { count:resp.Count, items:buildCollectionItems(resp.Items), consumedCapacityUnits:resp.ConsumedCapacityUnits };
+		var result = { count:resp.Count, consumedCapacityUnits:resp.ConsumedCapacityUnits };
+		if (resp.Items != null) Reflect.setField(result, "items", buildCollectionItems(resp.Items));
 		if (resp.LastEvaluatedKey != null) Reflect.setField(result, "lastEvaluatedKey", buildKey(resp.LastEvaluatedKey));
 		return result;
 	}
@@ -403,7 +404,7 @@ class Database {
 	 * @param	?scanLimit	Stop after this number of results have been scanned (not necessarily returned). 0 means unlimited.
 	 * @param	?count	If true then the result will only contain the number of items and not the attributes.
 	 * @param	?exclusiveStartKey	Will start the search from the element immediately proceeding this one.
-	 * @return	A list of results as well as some meta data.
+	 * @return	A list of results as well as some meta data. If count is true then only returns meta data.
 	 */
 	public function scan (table:String, ?filters:Hash<ComparisonFunction>, ?attributesToGet:Array<String>, ?scanLimit:Int = 0, ?count:Bool = false, ?exclusiveStartKey:PrimaryKey):QueryScanResult {
 		var req = { TableName:table, Count:count };
@@ -419,7 +420,8 @@ class Database {
 		if (exclusiveStartKey != null) Reflect.setField(req, "ExclusiveStartKey", mapKey(exclusiveStartKey));
 		
 		var resp = sendRequest(OP_SCAN, req);
-		var result = { count:resp.Count, items:buildCollectionItems(resp.Items), consumedCapacityUnits:resp.ConsumedCapacityUnits, scannedCount:resp.ScannedCount };
+		var result = { count:resp.Count, consumedCapacityUnits:resp.ConsumedCapacityUnits, scannedCount:resp.ScannedCount };
+		if (resp.Items != null) Reflect.setField(result, "items", buildCollectionItems(resp.Items));
 		if (resp.LastEvaluatedKey != null) Reflect.setField(result, "lastEvaluatedKey", buildKey(resp.LastEvaluatedKey));
 		return result;
 	}

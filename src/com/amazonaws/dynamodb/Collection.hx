@@ -21,7 +21,7 @@ class Collection {
 	public var filters:Null<Hash<ComparisonFunction>>;
 	public var limit:Int;
 	public var scanLimit:Int;
-	public var count:Bool;
+	public var doCount:Bool;
 	public var scanForward:Bool;
 	public var consistantRead:Bool;
 	public var auto:Bool;
@@ -42,7 +42,7 @@ class Collection {
 	 * @param	?hashKey	If provided then a query will be performed on this key. If not then the whole database will be scanned.
 	 * @param	?options	Additional parameters.
 	 */
-	public function new (db:Database, table:String, ?hashKey:Dynamic, ?options:{ ?limit:Int, ?scanLimit:Int, ?count:Bool, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }) {
+	public function new (db:Database, table:String, ?hashKey:Dynamic, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }) {
 		this.db = db;
 		this.table = table;
 		this.hashKey = hashKey;
@@ -50,6 +50,7 @@ class Collection {
 		this.head = null;
 		this.tail = null;
 		this.counted = 0;
+		this.doCount = false;
 		this.delay = 1;
 		this.metrics = { consumedCapacityUnits:0, count:0, scannedCount:0 };
 		
@@ -57,28 +58,52 @@ class Collection {
 			//Defaults
 			limit = 0;
 			scanLimit = 0;
-			count = false;
 			scanForward = true;
 			consistantRead = false;
 			auto = true;
 		} else {
 			limit = options.limit != null ? options.limit : 0;
 			scanLimit = options.scanLimit != null ? options.scanLimit : 0;
-			count = options.count != null ? options.count : false;
 			scanForward = options.scanForward != null ? options.scanForward : true;
 			consistantRead = options.consistantRead != null ? options.consistantRead : false;
 			auto = options.auto != null ? options.auto : true;
 		}
 	}
 	
+	
+	/**
+	 * Constructs an iterable collection for querying a table.
+	 * 
+	 * @param	db	A reference to the database.
+	 * @param	table	The table you want to query.
+	 * @param	hashKey	The hash key to query on.
+	 * @param	?options	Additional parameters.
+	 */
+	public static function query (db:Database, table:String, hashKey:Dynamic, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }):Collection {
+		return new Collection(db, table, hashKey, options);
+	}
+	
+	
+	/**
+	 * Constructs an iterable collection for scanning a table.
+	 * 
+	 * @param	db	A reference to the database.
+	 * @param	table	The table you want to scan.
+	 * @param	?options	Additional parameters.
+	 */
+	public static function scan (db:Database, table:String, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }):Collection {
+		return new Collection(db, table, null, options);
+	}
+	
 	function queryMoreItems ():Void {
 		var result:QueryScanResult = null;
 		if (auto) {
 			//We are automatically handling errors and retrying queries with exponentially increasing delays
+			delay = 1;
 			while (result == null) {
 				try {
-					if (hashKey != null) result = db.query(table, hashKey, rangeKeyComparisonFunction, attributesToGet, limit, count, scanForward, consistantRead, lastEvaluatedKey);
-					else result = db.scan(table, filters, attributesToGet, scanLimit, count, lastEvaluatedKey);
+					if (hashKey != null) result = db.query(table, hashKey, rangeKeyComparisonFunction, attributesToGet, limit, doCount, scanForward, consistantRead, lastEvaluatedKey);
+					else result = db.scan(table, filters, attributesToGet, scanLimit, doCount, lastEvaluatedKey);
 				} catch (e:DynamoDBError) {
 					if (result == null) {
 						if (delay > AUTO_RETRIES_UPPER_LIMIT) throw "Failed to retrieve items from database.";
@@ -90,19 +115,21 @@ class Collection {
 			}
 		} else {
 			//Throw errors to the user
-			if (hashKey != null) result = db.query(table, hashKey, rangeKeyComparisonFunction, attributesToGet, limit, count, scanForward, consistantRead, lastEvaluatedKey);
-			else result = db.scan(table, filters, attributesToGet, scanLimit, count, lastEvaluatedKey);
+			if (hashKey != null) result = db.query(table, hashKey, rangeKeyComparisonFunction, attributesToGet, limit, doCount, scanForward, consistantRead, lastEvaluatedKey);
+			else result = db.scan(table, filters, attributesToGet, scanLimit, doCount, lastEvaluatedKey);
 		}
 		
 		//Add items to the list
-		for (i in result.items) {
-			var node = new FastCell<Attributes>(i, null);
-			if (tail == null) {
-				head = node;
-				tail = node;
-			} else {
-				tail.next = node;
-				tail = node;
+		if (result.items != null) {
+			for (i in result.items) {
+				var node = new FastCell<Attributes>(i, null);
+				if (tail == null) {
+					head = node;
+					tail = node;
+				} else {
+					tail.next = node;
+					tail = node;
+				}
 			}
 		}
 		
@@ -128,12 +155,26 @@ class Collection {
 	}
 	
 	public function next ():Attributes {
+		if (doCount) {
+			//This is a count operation so increment counted based on count results
+			counted = metrics.count;
+			return null;
+		}
+		
 		if (head == null) return null;
 		
 		var item = head.elt;
 		head = head.next;
 		counted++;
 		return item;
+	}
+	
+	public function count ():Int {
+		doCount = true;
+		//Load in all possible items
+		for (i in this) {
+		}
+		return metrics.count > limit && limit != 0 ? limit : metrics.count;
 	}
 	
 }
