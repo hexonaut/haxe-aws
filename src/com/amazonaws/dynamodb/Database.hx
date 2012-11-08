@@ -98,13 +98,28 @@ class Database {
 		this.config = config;
 	}
 	
+	function base64PaddedEncode (bytes:Bytes):String {
+		var size = bytes.length % 3;
+		var suffix = "";
+		if (size == 1) {
+			suffix = "==";
+		} else if (size == 2) {
+			suffix = "=";
+		}
+		return BaseCode.encode(bytes.toString(), BASE64_CHARSET) + suffix;
+	}
+	
+	function base64PaddedDecode (str:String):Bytes {
+		return Bytes.ofString(BaseCode.decode(str.substr(0, str.indexOf("=")), BASE64_CHARSET));
+	}
+	
 	function mapKeyValue (key:Dynamic):Dynamic {
 		if (Std.is(key, String)) {
 			return { S:key };
 		} else if (Std.is(key, Float) || Std.is(key, Int)) {
 			return { N:Std.string(key)};
 		} else if (Std.is(key, Bytes)) {
-			return { B:BaseCode.encode(key.toString(), BASE64_CHARSET) };
+			return { B:base64PaddedEncode(cast(key, Bytes)) };
 		} else {
 			throw "Invalid primary key type. Must be either String, Float, Int or haxe.io.Bytes.";
 		}
@@ -131,7 +146,7 @@ class Database {
 		} else if (Std.is(data, Float) || Std.is(data, Int)) {
 			return { N:Std.string(data) };
 		} else if (Std.is(data, Bytes)) {
-			return { B:BaseCode.encode(data.toString(), BASE64_CHARSET) };
+			return { B:base64PaddedEncode(cast(data, Bytes)) };
 		} else if (Std.is(data, Array)) {
 			var arr:Array<Dynamic> = cast data;
 			if (arr.length > 0) {
@@ -143,7 +158,7 @@ class Database {
 				} else if (Std.is(firstElement, Bytes)) {
 					var a = new Array<String>();
 					for (i in cast(data, Array<Dynamic>)) {
-						a.push(BaseCode.encode(i.toString(), BASE64_CHARSET));
+						a.push(base64PaddedEncode(cast(i, Bytes)));
 					}
 					return { BS:a };
 				} else {
@@ -204,7 +219,7 @@ class Database {
 			var i = Std.parseInt(val);
 			var f = Std.parseFloat(val);
 			return i == f ? i : f;
-		case "B": return Bytes.ofString(BaseCode.decode(Reflect.field(data, field), BASE64_CHARSET));
+		case "B": return base64PaddedDecode(Reflect.field(data, field));
 		default: throw "Unknown primary key type.";
 		}
 	}
@@ -233,7 +248,7 @@ class Database {
 			var i = Std.parseInt(val);
 			var f = Std.parseFloat(val);
 			return i == f ? i : f;
-		case "B": return Bytes.ofString(BaseCode.decode(Reflect.field(data, field), BASE64_CHARSET));
+		case "B": return base64PaddedDecode(Reflect.field(data, field));
 		case "SS": return Reflect.field(data, field);
 		case "NS":
 			var a = new Array<Dynamic>();
@@ -244,7 +259,7 @@ class Database {
 		case "BS":
 			var a = new Array<Dynamic>();
 			for (i in cast(Reflect.field(data, field), Array<Dynamic>)) {
-				a.push(Bytes.ofString(BaseCode.decode(i, BASE64_CHARSET)));
+				a.push(base64PaddedDecode(i));
 			}
 			return a;
 		default: throw "Unknown attribute type.";
@@ -474,6 +489,7 @@ class Database {
 		conn.setHeader("content-type", "application/x-amz-json-1.0");
 		conn.setHeader("x-amz-target", SERVICE + "_" + API_VERSION + "." + operation);
 		conn.setPostData(Json.stringify(payload));
+		trace(Json.stringify(payload));
 		
 		var err = null;
 		conn.onError = function (msg:String):Void {
