@@ -148,7 +148,7 @@ class Collection {
 		//Limit has been reached
 		if (limit != 0 && counted == limit) return false;
 		
-		if (!firstLoad || (head == null && lastEvaluatedKey != null)) {
+		while (!firstLoad || (head == null && lastEvaluatedKey != null)) {
 			//Load first batch
 			queryMoreItems();
 			firstLoad = true;
