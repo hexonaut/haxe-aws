@@ -81,6 +81,4 @@ You can also extend PersistantObject on your custom object to simplify usage. Be
 	//Delete the object
 	c2.delete();
 	
-One thing to note is that because DynamoDB only supports data types of either Number, String or Binary the storage of arbitrary Haxe types requires not using Binary in the standard convention. Binary will now always contain serialized data via haxe.Serializer. This means that if you are switching over to PersistantObject from a regular schema which is using Binary data, the previous data will not read in correctly. You will need to correct this beforehand.
-	
-	
+Supported types are Bool, Int, Float, String, Date and Bytes.

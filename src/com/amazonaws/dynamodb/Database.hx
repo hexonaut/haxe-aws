@@ -489,7 +489,6 @@ class Database {
 		conn.setHeader("content-type", "application/x-amz-json-1.0");
 		conn.setHeader("x-amz-target", SERVICE + "_" + API_VERSION + "." + operation);
 		conn.setPostData(Json.stringify(payload));
-		trace(Json.stringify(payload));
 		
 		var err = null;
 		conn.onError = function (msg:String):Void {

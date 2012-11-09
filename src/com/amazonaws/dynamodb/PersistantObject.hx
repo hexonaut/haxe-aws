@@ -11,6 +11,7 @@ import haxe.io.Bytes;
 import haxe.rtti.Meta;
 import haxe.Serializer;
 import haxe.Unserializer;
+import Type;
 
 class PersistantObject {
 	
@@ -72,22 +73,41 @@ class PersistantObject {
 	}
 	
 	inline function __haxeToDb (val:Dynamic):Dynamic {
-		if (Std.is(val, Int) || Std.is(val, Float) || Std.is(val, String)) {
-			//These are all fine
+		if (Std.is(val, Int) || Std.is(val, Float) || Std.is(val, String) || Std.is(val, Bytes)) {
+			//These are all fine as is
 			return val;
+		} else if (Std.is(val, Bool)) {
+			//Bool -> Int
+			return val ? 1 : 0;
+		} else if (Std.is(val, Date)) {
+			//Date -> Float
+			return cast(val, Date).getTime();
 		} else {
-			//Serialize everything else and store as bytes
-			return Bytes.ofString(Serializer.run(val));
+			throw "Unsupported type.";
 		}
 	}
 	
-	inline function __dbToHaxe (val:Dynamic):Dynamic {
-		if (Std.is(val, Int) || Std.is(val, Float) || Std.is(val, String)) {
-			//These are all fine
+	inline function __dbToHaxe (val:Dynamic, field:String):Dynamic {
+		var ref = Type.typeof(Reflect.field(this, field));
+		if (Std.is(val, String) || Std.is(val, Bytes)) {
+			//These are all fine as is
 			return val;
+		} else if (Std.is(val, Int)) {
+			//Int may be either an Int or a Bool
+			if (Type.enumEq(ref, TBool)) {
+				return val == 1;
+			} else {
+				return val;
+			}
+		} else if (Std.is(val, Float)) {
+			//Float may be either a Float or a Date
+			if (Type.enumEq(ref, TClass(Date))) {
+				return Date.fromTime(val);
+			} else {
+				return val;
+			}
 		} else {
-			//Unserialize everything else
-			return Unserializer.run(val.toString());
+			throw "Unsupported type.";
 		}
 	}
 	
@@ -110,7 +130,7 @@ class PersistantObject {
 		var item = __doOperation("getItem", [__table, __key(), null, false]);
 		for (i in Reflect.fields(untyped Type.getClass(this).prototype)) {
 			var val = Reflect.field(item, i);
-			if (!__shouldIgnore(i) && val != null) Reflect.setField(this, i, __dbToHaxe(val));
+			if (!__shouldIgnore(i) && val != null) Reflect.setField(this, i, __dbToHaxe(val, i));
 		}
 	}
 	
