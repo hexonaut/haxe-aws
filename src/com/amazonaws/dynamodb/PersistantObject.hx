@@ -25,7 +25,7 @@ class PersistantObject {
 	@ignore var __hash:String;
 	@ignore var __range:String;
 
-	public function new (?db:Database, ?table:String) {
+	public function new (?dbObject:Dynamic, ?db:Database, ?table:String) {
 		if (db != null) __db = db;
 		else __db = DATABASE;
 		
@@ -40,6 +40,8 @@ class PersistantObject {
 		if (__hash == null) throw "Hash meta tag required.";
 		if (__table == null) throw "Table meta tag required.";
 		if (__db == null) throw "Database needs to be set.";
+		
+		if (dbObject != null) build(dbObject);
 	}
 	
 	inline function __key ():PrimaryKey {
@@ -126,12 +128,16 @@ class PersistantObject {
 		return null;
 	}
 	
-	public function get ():Void {
-		var item = __doOperation("getItem", [__table, __key(), null, false]);
+	public function build (dbObject:Dynamic):Void {
 		for (i in Reflect.fields(untyped Type.getClass(this).prototype)) {
-			var val = Reflect.field(item, i);
+			var val = Reflect.field(dbObject, i);
 			if (!__shouldIgnore(i) && val != null) Reflect.setField(this, i, __dbToHaxe(val, i));
 		}
+	}
+	
+	public function get ():Void {
+		var item = __doOperation("getItem", [__table, __key(), null, false]);
+		build(item);
 	}
 	
 	public function insert ():Void {
