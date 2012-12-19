@@ -486,7 +486,7 @@ class Database {
 	function sendRequest (operation:String, payload:Dynamic):Dynamic {
 		var conn = new Sig4Http((config.ssl ? "https" : "http") + "://" + config.host + "/", config);
 		
-		conn.setHeader("content-type", "application/x-amz-json-1.0");
+		conn.setHeader("content-type", "application/x-amz-json-1.0; charset=utf-8");
 		conn.setHeader("x-amz-target", SERVICE + "_" + API_VERSION + "." + operation);
 		conn.setPostData(Json.stringify(payload));
 		

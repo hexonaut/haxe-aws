@@ -13,6 +13,7 @@ import haxe.Serializer;
 import haxe.Unserializer;
 import Type;
 
+#if !macro @:autoBuild(com.amazonaws.dynamodb.PersistantObjectMacro.build()) #end
 class PersistantObject {
 	
 	static var AUTO_RETRIES_UPPER_LIMIT:Int = 64;		//If request fails after 64 seconds of waiting then give up
@@ -90,20 +91,20 @@ class PersistantObject {
 	}
 	
 	inline function __dbToHaxe (val:Dynamic, field:String):Dynamic {
-		var ref = Type.typeof(Reflect.field(this, field));
+		var ref:String = Reflect.field(untyped Type.getClass(this).__meta__.fields, field).type[0];
 		if (Std.is(val, String) || Std.is(val, Bytes)) {
 			//These are all fine as is
 			return val;
 		} else if (Std.is(val, Int)) {
 			//Int may be either an Int or a Bool
-			if (Type.enumEq(ref, TBool)) {
+			if (ref == "Bool") {
 				return val == 1;
 			} else {
 				return val;
 			}
 		} else if (Std.is(val, Float)) {
 			//Float may be either a Float or a Date
-			if (Type.enumEq(ref, TClass(Date))) {
+			if (ref == "Date") {
 				return Date.fromTime(val);
 			} else {
 				return val;

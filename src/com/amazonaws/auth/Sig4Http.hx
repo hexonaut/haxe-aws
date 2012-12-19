@@ -5,6 +5,7 @@ import chx.hash.Sha256;
 import haxe.Http;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
+import haxe.Utf8;
 
 using DateTools;
 using StringTools;
