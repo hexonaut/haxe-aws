@@ -24,15 +24,23 @@ class IAMConfig {
 	 * @param	secretKey	Your IAM secret access key.
 	 * @param	region	The region you want to connect to.
 	 * @param	service	The service you want to use. IE "dynamodb".
-	 * @param	?ssl	If true then the connection will use https instead of http. May require additional ssl libraries.
 	 */
-	public function new (host:String, accessKey:String, secretKey:String, region:String, service:String, ?ssl:Bool = true) {
+	public function new (host:String, accessKey:String, secretKey:String, region:String, service:String) {
 		this.host = host;
 		this.accessKey = accessKey;
 		this.secretKey = secretKey;
 		this.region = region;
 		this.service = service;
-		this.ssl = ssl;
+		this.ssl = true;
+	}
+	
+	/**
+	 * Turn on an ssl connection.
+	 * 
+	 * @param	on	If true then the connection will use https instead of http. May require additional ssl libraries.
+	 */
+	public function setSSL (on:Bool):Void {
+		this.ssl = on;
 	}
 	
 	/**

@@ -4,6 +4,7 @@ import com.amazonaws.auth.IAMConfig;
 import com.amazonaws.auth.Sig4Http;
 import com.amazonaws.dynamodb.Collection;
 import com.amazonaws.dynamodb.DynamoDBError;
+import com.amazonaws.dynamodb.DynamoDBException;
 import haxe.BaseCode;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
@@ -89,6 +90,8 @@ class Database {
 	
 	var config:IAMConfig;
 	
+	var throughputRegulator:Null<ThroughputRegulator>;
+	
 	/**
 	 * Create a new DynamoDB connection.
 	 * 
@@ -96,6 +99,13 @@ class Database {
 	 */
 	public function new (config:IAMConfig) {
 		this.config = config;
+		
+		if (Std.is(config, DynamoDBConfig)) {
+			//Database specific stuff
+			var dbConfig = cast(config, DynamoDBConfig);
+			throughputRegulator = dbConfig.throughputRegulator;
+			throughputRegulator.init(this);
+		}
 	}
 	
 	function base64PaddedEncode (bytes:Bytes):String {
@@ -283,6 +293,34 @@ class Database {
 		return items;
 	}
 	
+	function writeRequest (table:String, op:String, req:Dynamic):Dynamic {
+		try {
+			var resp = sendRequest(OP_DELETE_ITEM, req);
+			if (throughputRegulator != null) throughputRegulator.writeConsumed(table, resp.ConsumedCapacityUnits);
+			return resp;
+		} catch (e:DynamoDBException) {
+			switch (e) {
+				case ProvisionedThroughputExceededException: if (throughputRegulator != null) throughputRegulator.writeFailed(table);
+				default:
+			}
+			throw e;
+		}
+	}
+	
+	function readRequest (table:String, op:String, req:Dynamic):Dynamic {
+		try {
+			var resp = sendRequest(OP_DELETE_ITEM, req);
+			if (throughputRegulator != null) throughputRegulator.readConsumed(table, resp.ConsumedCapacityUnits);
+			return resp;
+		} catch (e:DynamoDBException) {
+			switch (e) {
+				case ProvisionedThroughputExceededException: if (throughputRegulator != null) throughputRegulator.readFailed(table);
+				default:
+			}
+			throw e;
+		}
+	}
+	
 	/*public function batchGetItems (requestItems:Hash<{keys:Array<PrimaryKey>, ?attributesToGet:Array<String>}>):Hash<Collection> {
 		var req = { };
 		for (i in requestItems.keys()) {
@@ -325,9 +363,19 @@ class Database {
 		if (condition != null) Reflect.setField(req, "Expected", mapConditional(condition));
 		if (returnOld) Reflect.setField(req, "ReturnValues", "ALL_OLD");
 		
-		var resp = sendRequest(OP_DELETE_ITEM, req);
+		var resp = writeRequest(table, OP_DELETE_ITEM, req);
 		if (returnOld) return buildAttributes(resp.Attributes);
 		else return null;
+	}
+	
+	/**
+	 * Returns info about the given table.
+	 * 
+	 * @param	table	The table name.
+	 * @return	Information about the table.
+	 */
+	public function describeTable (table:String):TableInfo {
+		return new TableInfo(sendRequest(OP_DESCRIBE_TABLE, { TableName:table } ).Table);
 	}
 	
 	/**
@@ -343,12 +391,13 @@ class Database {
 		var req = { TableName:table, Key:mapKey(key), ConsistentRead:consistantRead }
 		if (attributesToGet != null) Reflect.setField(req, "AttributesToGet", attributesToGet);
 		
-		var resp = sendRequest(OP_GET_ITEM, req);
+		var resp = readRequest(table, OP_GET_ITEM, req);
 		return buildAttributes(resp.Item);
 	}
 	
 	/**
-	 * List all tables in the database.
+	 * List all tables in the database. May fail and return partial results.
+	 * Use getAllTables() for a quick and easy retrieval of all tables.
 	 * 
 	 * @param	?limit	An optional upper limit to stop at.
 	 * @param	?exclusiveStartTableName	Start at this table name.
@@ -361,6 +410,31 @@ class Database {
 		
 		var resp = sendRequest(OP_LIST_TABLES, req);
 		return { tableNames:resp.TableNames, lastEvaluatedTableName:resp.LastEvaluatedTableName };
+	}
+	
+	/**
+	 * Convenience method to retrieve all the tables in the database.
+	 * Use this if the number of tables is small. Otherwise it may be better to use listTables().
+	 * 
+	 * @return A list of all tables in the database.
+	 */
+	public function getAllTables ():Array<String> {
+		var delay = 1;
+		var tables = new Array<String>();
+		var lastTableName:String = null;
+		while (true) {
+			try {
+				var resp = listTables(null, lastTableName);
+				tables.concat(resp.tableNames);
+				lastTableName = resp.lastEvaluatedTableName;
+			} catch (e:DynamoDBException) {
+				if (delay > 64) throw "Failed to list all tables.";	//Fail after 64 seconds
+				
+				Sys.sleep(delay);
+				delay = delay << 1;
+			}
+		}
+		return tables;
 	}
 	
 	/**
@@ -377,7 +451,7 @@ class Database {
 		if (condition != null) Reflect.setField(req, "Expected", mapConditional(condition));
 		if (returnOld) Reflect.setField(req, "ReturnValues", "ALL_OLD");
 		
-		var resp = sendRequest(OP_PUT_ITEM, req);
+		var resp = writeRequest(table, OP_PUT_ITEM, req);
 		if (returnOld) return buildAttributes(resp.Attributes);
 		else return null;
 	}
@@ -403,7 +477,7 @@ class Database {
 		if (limit != 0) Reflect.setField(req, "Limit", limit);
 		if (exclusiveStartKey != null) Reflect.setField(req, "ExclusiveStartKey", mapKey(exclusiveStartKey));
 		
-		var resp = sendRequest(OP_QUERY, req);
+		var resp = readRequest(table, OP_QUERY, req);
 		var result = { count:resp.Count, consumedCapacityUnits:resp.ConsumedCapacityUnits };
 		if (resp.Items != null) Reflect.setField(result, "items", buildCollectionItems(resp.Items));
 		if (resp.LastEvaluatedKey != null) Reflect.setField(result, "lastEvaluatedKey", buildKey(resp.LastEvaluatedKey));
@@ -434,7 +508,7 @@ class Database {
 		if (scanLimit != 0) Reflect.setField(req, "Limit", scanLimit);
 		if (exclusiveStartKey != null) Reflect.setField(req, "ExclusiveStartKey", mapKey(exclusiveStartKey));
 		
-		var resp = sendRequest(OP_SCAN, req);
+		var resp = readRequest(table, OP_SCAN, req);
 		var result = { count:resp.Count, consumedCapacityUnits:resp.ConsumedCapacityUnits, scannedCount:resp.ScannedCount };
 		if (resp.Items != null) Reflect.setField(result, "items", buildCollectionItems(resp.Items));
 		if (resp.LastEvaluatedKey != null) Reflect.setField(result, "lastEvaluatedKey", buildKey(resp.LastEvaluatedKey));
@@ -463,9 +537,21 @@ class Database {
 			else Reflect.setField(req, "ReturnValues", "ALL_OLD");
 		}
 		
-		var resp = sendRequest(OP_UPDATE_ITEM, req);
+		var resp = writeRequest(table, OP_UPDATE_ITEM, req);
 		if (returnNew != null) return buildAttributes(resp.Attributes);
 		else return null;
+	}
+	
+	/**
+	 * Updates a table's read/write capacity.
+	 * 
+	 * @param	table	The table's name.
+	 * @param	readCapacity	The new read capacity for the table.
+	 * @param	writeCapacity	The new write capacity for the table.
+	 * @return	Information about the table.
+	 */
+	public function updateTable (table:String, readCapacity:Int, writeCapacity:Int):TableInfo {
+		return new TableInfo(sendRequest(OP_UPDATE_TABLE, { TableName:table, ProvisionedThroughput:{ ReadCapacityUnits:readCapacity, WriteCapacityUnits:writeCapacity } } ).TableDescription);
 	}
 	
 	function formatError (httpCode:Int, type:String, message:String):Void {
