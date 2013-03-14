@@ -5,7 +5,7 @@ A Haxe library for communicating with the Amazon AWS (http://www.amazonaws.com) 
 
 Implemented services:
 
-*	URL Authentication
+*	IAM Authentication
 *	DynamoDB (Except batch read/write)
 
 DynamoDB Examples
