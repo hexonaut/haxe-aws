@@ -90,8 +90,6 @@ class Database {
 	
 	var config:IAMConfig;
 	
-	var throughputRegulator:Null<ThroughputRegulator>;
-	
 	/**
 	 * Create a new DynamoDB connection.
 	 * 
@@ -99,13 +97,6 @@ class Database {
 	 */
 	public function new (config:IAMConfig) {
 		this.config = config;
-		
-		if (Std.is(config, DynamoDBConfig)) {
-			//Database specific stuff
-			var dbConfig = cast(config, DynamoDBConfig);
-			throughputRegulator = dbConfig.throughputRegulator;
-			throughputRegulator.init(this);
-		}
 	}
 	
 	function base64PaddedEncode (bytes:Bytes):String {
@@ -295,28 +286,16 @@ class Database {
 	
 	function writeRequest (table:String, op:String, req:Dynamic):Dynamic {
 		try {
-			var resp = sendRequest(OP_DELETE_ITEM, req);
-			if (throughputRegulator != null) throughputRegulator.writeConsumed(table, resp.ConsumedCapacityUnits);
-			return resp;
+			return sendRequest(OP_DELETE_ITEM, req);
 		} catch (e:DynamoDBException) {
-			switch (e) {
-				case ProvisionedThroughputExceededException: if (throughputRegulator != null) throughputRegulator.writeFailed(table);
-				default:
-			}
 			throw e;
 		}
 	}
 	
 	function readRequest (table:String, op:String, req:Dynamic):Dynamic {
 		try {
-			var resp = sendRequest(OP_DELETE_ITEM, req);
-			if (throughputRegulator != null) throughputRegulator.readConsumed(table, resp.ConsumedCapacityUnits);
-			return resp;
+			return sendRequest(OP_DELETE_ITEM, req);
 		} catch (e:DynamoDBException) {
-			switch (e) {
-				case ProvisionedThroughputExceededException: if (throughputRegulator != null) throughputRegulator.readFailed(table);
-				default:
-			}
 			throw e;
 		}
 	}
