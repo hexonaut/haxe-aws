@@ -8,6 +8,8 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
+
+
 package com.amazonaws.dynamodb;
 
 import com.amazonaws.auth.IAMConfig;
@@ -557,7 +559,12 @@ class Database {
 		var data:BytesOutput = new BytesOutput();
 		conn.applySigning(true);
 		conn.customRequest(true, data);
-		var out = Json.parse(data.getBytes().toString());
+		var out:Dynamic;
+		try {
+			out = Json.parse(data.getBytes().toString());
+		} catch (e:Dynamic) {
+			throw ConnectionInterrupted;
+		}
 		if (err != null) formatError(Std.parseInt(err.substr(err.indexOf("#") + 1)), out.__type, out.message);
 		return out;
 	}
