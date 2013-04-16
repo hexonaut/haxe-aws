@@ -1,3 +1,13 @@
+/****
+* Copyright (C) 2013 Sam MacPherson
+* 
+* Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+* 
+* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+* 
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+****/
+
 package com.amazonaws.auth;
 
 import chx.hash.HMAC;
@@ -125,6 +135,7 @@ class Sig4Http extends Http {
 		if (daylightSavings) now = now.delta(( -1).hours());
 		
 		//Add in additional query parameters and headers
+		addSigningHeader("host", config.host, false);
 		if (post) {
 			addSigningHeader("x-amz-date", now.format("%Y%m%dT%H%M%SZ"));
 		} else {
@@ -138,8 +149,6 @@ class Sig4Http extends Http {
 			setParameter("X-Amz-Date", now.format("%Y%m%dT%H%M%SZ"));
 			setParameter("X-Amz-SignedHeaders", signedHeaders.toString());
 		}
-		
-		addSigningHeader("host", config.host, false);
 		
 		//Apply sort operations on parameters and headers
 		_params.sort(function (x, y):Int {
@@ -162,7 +171,7 @@ class Sig4Http extends Http {
 		for (i in 0 ... _params.length) {
 			var entry = _params[i];
 			buf.add(entry.param + "=" + entry.value);
-			if (i + 1 < _params.length) buf.add(",");
+			if (i + 1 < _params.length) buf.add("&");
 		}
 		buf.add("\n");
 		

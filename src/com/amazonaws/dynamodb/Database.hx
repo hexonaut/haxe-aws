@@ -1,3 +1,13 @@
+/****
+* Copyright (C) 2013 Sam MacPherson
+* 
+* Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+* 
+* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+* 
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+****/
+
 package com.amazonaws.dynamodb;
 
 import com.amazonaws.auth.IAMConfig;
@@ -284,22 +294,6 @@ class Database {
 		return items;
 	}
 	
-	function writeRequest (table:String, op:String, req:Dynamic):Dynamic {
-		try {
-			return sendRequest(OP_DELETE_ITEM, req);
-		} catch (e:DynamoDBException) {
-			throw e;
-		}
-	}
-	
-	function readRequest (table:String, op:String, req:Dynamic):Dynamic {
-		try {
-			return sendRequest(OP_DELETE_ITEM, req);
-		} catch (e:DynamoDBException) {
-			throw e;
-		}
-	}
-	
 	/*public function batchGetItems (requestItems:Hash<{keys:Array<PrimaryKey>, ?attributesToGet:Array<String>}>):Hash<Collection> {
 		var req = { };
 		for (i in requestItems.keys()) {
@@ -342,7 +336,7 @@ class Database {
 		if (condition != null) Reflect.setField(req, "Expected", mapConditional(condition));
 		if (returnOld) Reflect.setField(req, "ReturnValues", "ALL_OLD");
 		
-		var resp = writeRequest(table, OP_DELETE_ITEM, req);
+		var resp = sendRequest(OP_DELETE_ITEM, req);
 		if (returnOld) return buildAttributes(resp.Attributes);
 		else return null;
 	}
@@ -370,7 +364,7 @@ class Database {
 		var req = { TableName:table, Key:mapKey(key), ConsistentRead:consistantRead }
 		if (attributesToGet != null) Reflect.setField(req, "AttributesToGet", attributesToGet);
 		
-		var resp = readRequest(table, OP_GET_ITEM, req);
+		var resp = sendRequest(OP_GET_ITEM, req);
 		return buildAttributes(resp.Item);
 	}
 	
@@ -430,7 +424,7 @@ class Database {
 		if (condition != null) Reflect.setField(req, "Expected", mapConditional(condition));
 		if (returnOld) Reflect.setField(req, "ReturnValues", "ALL_OLD");
 		
-		var resp = writeRequest(table, OP_PUT_ITEM, req);
+		var resp = sendRequest(OP_PUT_ITEM, req);
 		if (returnOld) return buildAttributes(resp.Attributes);
 		else return null;
 	}
@@ -456,7 +450,7 @@ class Database {
 		if (limit != 0) Reflect.setField(req, "Limit", limit);
 		if (exclusiveStartKey != null) Reflect.setField(req, "ExclusiveStartKey", mapKey(exclusiveStartKey));
 		
-		var resp = readRequest(table, OP_QUERY, req);
+		var resp = sendRequest(OP_QUERY, req);
 		var result = { count:resp.Count, consumedCapacityUnits:resp.ConsumedCapacityUnits };
 		if (resp.Items != null) Reflect.setField(result, "items", buildCollectionItems(resp.Items));
 		if (resp.LastEvaluatedKey != null) Reflect.setField(result, "lastEvaluatedKey", buildKey(resp.LastEvaluatedKey));
@@ -487,7 +481,7 @@ class Database {
 		if (scanLimit != 0) Reflect.setField(req, "Limit", scanLimit);
 		if (exclusiveStartKey != null) Reflect.setField(req, "ExclusiveStartKey", mapKey(exclusiveStartKey));
 		
-		var resp = readRequest(table, OP_SCAN, req);
+		var resp = sendRequest(OP_SCAN, req);
 		var result = { count:resp.Count, consumedCapacityUnits:resp.ConsumedCapacityUnits, scannedCount:resp.ScannedCount };
 		if (resp.Items != null) Reflect.setField(result, "items", buildCollectionItems(resp.Items));
 		if (resp.LastEvaluatedKey != null) Reflect.setField(result, "lastEvaluatedKey", buildKey(resp.LastEvaluatedKey));
@@ -516,7 +510,7 @@ class Database {
 			else Reflect.setField(req, "ReturnValues", "ALL_OLD");
 		}
 		
-		var resp = writeRequest(table, OP_UPDATE_ITEM, req);
+		var resp = sendRequest(OP_UPDATE_ITEM, req);
 		if (returnNew != null) return buildAttributes(resp.Attributes);
 		else return null;
 	}
