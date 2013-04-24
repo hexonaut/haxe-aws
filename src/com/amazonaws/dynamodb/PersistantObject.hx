@@ -8,8 +8,6 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
-
-
 package com.amazonaws.dynamodb;
 
 /**
@@ -44,7 +42,8 @@ class PersistantObject {
 		
 		var meta = untyped Type.getClass(this).__meta__.obj;
 		if (meta == null) throw "Meta tags required.";
-		if (TABLE_PREFIX != null) __table = TABLE_PREFIX;
+		if (table != null) __table = table;
+		else if (TABLE_PREFIX != null) __table = TABLE_PREFIX;
 		else __table = "";
 		if (meta.table != null) __table += meta.table[0];
 		if (meta.hash != null) __hash = meta.hash[0];
