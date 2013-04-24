@@ -21,6 +21,7 @@ import haxe.io.BytesOutput;
 import haxe.Json;
 import sys.net.Socket;
 
+using com.amazonaws.util.ByteTools;
 using DateTools;
 
 /**
@@ -36,17 +37,17 @@ enum DynamoDBType {
 typedef AttributeDefinition = {
 	name:String,
 	type:DynamoDBType
-}
+};
 
 typedef PrimaryKeyDefinition = {
 	hash:AttributeDefinition,
 	?range:AttributeDefinition
-}
+};
 
 typedef PrimaryKey = {
 	hash:Dynamic,
 	?range:Dynamic
-}
+};
 
 typedef Attribute = Dynamic;
 
@@ -73,8 +74,6 @@ typedef ListTablesResponse = {
  */
 
 class Database {
-	
-	static inline var BASE64_CHARSET:String = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/+";
 	
 	static inline var SERVICE:String = "DynamoDB";
 	static inline var API_VERSION:String = "20111205";
@@ -114,30 +113,15 @@ class Database {
 	public static inline var OP_NOT_CONTAINS:String = "NOT_CONTAINS";
 	public static inline var OP_IN:String = "IN";
 	
-	var config:IAMConfig;
+	var config:DynamoDBConfig;
 	
 	/**
 	 * Create a new DynamoDB connection.
 	 * 
 	 * @param	config	An IAM configuration file.
 	 */
-	public function new (config:IAMConfig) {
+	public function new (config:DynamoDBConfig) {
 		this.config = config;
-	}
-	
-	function base64PaddedEncode (bytes:Bytes):String {
-		var size = bytes.length % 3;
-		var suffix = "";
-		if (size == 1) {
-			suffix = "==";
-		} else if (size == 2) {
-			suffix = "=";
-		}
-		return BaseCode.encode(bytes.toString(), BASE64_CHARSET) + suffix;
-	}
-	
-	function base64PaddedDecode (str:String):Bytes {
-		return Bytes.ofString(BaseCode.decode(str.substr(0, str.indexOf("=")), BASE64_CHARSET));
 	}
 	
 	function mapKeyValue (key:Dynamic):Dynamic {
@@ -146,7 +130,7 @@ class Database {
 		} else if (Std.is(key, Float) || Std.is(key, Int)) {
 			return { N:Std.string(key)};
 		} else if (Std.is(key, Bytes)) {
-			return { B:base64PaddedEncode(cast(key, Bytes)) };
+			return { B:cast(key, Bytes).base64PaddedEncode() };
 		} else {
 			throw "Invalid primary key type. Must be either String, Float, Int or haxe.io.Bytes.";
 		}
@@ -188,7 +172,7 @@ class Database {
 		} else if (Std.is(data, Float) || Std.is(data, Int)) {
 			return { N:Std.string(data) };
 		} else if (Std.is(data, Bytes)) {
-			return { B:base64PaddedEncode(cast(data, Bytes)) };
+			return { B:cast(data, Bytes).base64PaddedEncode() };
 		} else if (Std.is(data, Array)) {
 			var arr:Array<Dynamic> = cast data;
 			if (arr.length > 0) {
@@ -200,7 +184,7 @@ class Database {
 				} else if (Std.is(firstElement, Bytes)) {
 					var a = new Array<String>();
 					for (i in cast(data, Array<Dynamic>)) {
-						a.push(base64PaddedEncode(cast(i, Bytes)));
+						a.push(cast(i, Bytes).base64PaddedEncode());
 					}
 					return { BS:a };
 				} else {
@@ -261,7 +245,7 @@ class Database {
 			var i = Std.parseInt(val);
 			var f = Std.parseFloat(val);
 			return i == f ? i : f;
-		case "B": return base64PaddedDecode(Reflect.field(data, field));
+		case "B": return Reflect.field(data, field).base64PaddedDecode();
 		default: throw "Unknown primary key type.";
 		}
 	}
@@ -290,7 +274,7 @@ class Database {
 			var i = Std.parseInt(val);
 			var f = Std.parseFloat(val);
 			return i == f ? i : f;
-		case "B": return base64PaddedDecode(Reflect.field(data, field));
+		case "B": return Reflect.field(data, field).base64PaddedDecode();
 		case "SS": return Reflect.field(data, field);
 		case "NS":
 			var a = new Array<Dynamic>();
@@ -301,7 +285,7 @@ class Database {
 		case "BS":
 			var a = new Array<Dynamic>();
 			for (i in cast(Reflect.field(data, field), Array<Dynamic>)) {
-				a.push(base64PaddedDecode(i));
+				a.push(i.base64PaddedDecode());
 			}
 			return a;
 		default: throw "Unknown attribute type.";

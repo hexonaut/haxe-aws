@@ -5,15 +5,16 @@ A Haxe library for communicating with the Amazon AWS (http://www.amazonaws.com) 
 
 Implemented services:
 
-*	IAM Authentication
+*	IAM Authentication (Signature V2 and V4)
 *	DynamoDB (Except batch read/write)
+*	Elastic MapReduce
 
 DynamoDB Examples
 -----------------
 
 Using DynamoDB is fairly straight forward.
 
-    var config = new com.amazonaws.auth.IAMConfig("dynamodb.us-east-1.amazonaws.com", "MYACCESSKEY", "MYSECRETKEY", "us-east-1", "dynamodb");
+    var config = new com.amazonaws.dynamodb.DynamoDBConfig("dynamodb.us-east-1.amazonaws.com", "MYACCESSKEY", "MYSECRETKEY", "us-east-1");
     var db = new com.amazonaws.dynamodb.Database(config);
 	
 	//Add 3 items to myTable
@@ -60,7 +61,7 @@ You can also extend PersistantObject on your custom object to simplify usage. Be
 		
 	}
 	
-	var config = new com.amazonaws.auth.IAMConfig("dynamodb.us-east-1.amazonaws.com", "MYACCESSKEY", "MYSECRETKEY", "us-east-1", "dynamodb");
+	var config = new com.amazonaws.dynamodb.DynamoDBConfig("dynamodb.us-east-1.amazonaws.com", "MYACCESSKEY", "MYSECRETKEY", "us-east-1");
     var db = new com.amazonaws.dynamodb.Database(config);
 	
 	PersistantObject.DATABASE = db;
@@ -90,3 +91,16 @@ You can also extend PersistantObject on your custom object to simplify usage. Be
 	c2.delete();
 	
 Supported types are Bool, Int, Float, String, Date and Bytes.
+
+Elastic MapReduce Examples
+--------------------------
+
+Here is how you run a custom script with Amazon EMR:
+
+	var config = new com.amazonaws.elasticmapreduce.EMRConfig("elasticmapreduce.us-east-1.amazonaws.com", "MYACCESSKEY", "MYSECRETKEY", "us-east-1");
+    var emr = new com.amazonaws.elasticmapreduce.ElasticMapReduce(config);
+	
+	emr.runJobFlow("TestJob", 
+		[{name:"Step1", jar:"s3://elasticmapreduce/libs/script-runner/script-runner.jar", args:["s3://mybucket/path/to/script"]}],
+		{ type:M1_SMALL }
+	);

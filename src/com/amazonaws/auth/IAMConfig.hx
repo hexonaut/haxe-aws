@@ -8,8 +8,6 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
-
-
 package com.amazonaws.auth;
 
 using DateTools;
@@ -31,7 +29,7 @@ class IAMConfig {
 	/**
 	 * Create a new configuration file for some AWS service.
 	 * 
-	 * @param	host	The AWS end point. This should be of the form "dynamodb.us-west-2.amazonaws.com".
+	 * @param	host	The AWS end point. This should be of the form "service.amazonaws.com".
 	 * @param	accessKey	Your IAM access key.
 	 * @param	secretKey	Your IAM secret access key.
 	 * @param	region	The region you want to connect to.
@@ -44,15 +42,6 @@ class IAMConfig {
 		this.region = region;
 		this.service = service;
 		this.ssl = true;
-	}
-	
-	/**
-	 * Turn on an ssl connection.
-	 * 
-	 * @param	on	If true then the connection will use https instead of http. May require additional ssl libraries.
-	 */
-	public function setSSL (on:Bool):Void {
-		this.ssl = on;
 	}
 	
 	/**

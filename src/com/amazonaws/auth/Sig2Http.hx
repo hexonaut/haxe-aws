@@ -12,12 +12,12 @@ package com.amazonaws.auth;
 
 import chx.hash.HMAC;
 import chx.hash.Sha256;
-import haxe.BaseCode;
 import haxe.Http;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import haxe.Utf8;
 
+using com.amazonaws.util.ByteTools;
 using DateTools;
 using StringTools;
 
@@ -29,8 +29,6 @@ using StringTools;
  */
 
 class Sig2Http extends Http {
-	
-	static inline var BASE_64 = new BaseCode(Bytes.ofString("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"));
 	
 	static inline var sha256 = new Sha256();
 	static inline var hmac = new HMAC(sha256);
@@ -110,20 +108,8 @@ class Sig2Http extends Http {
 			if (i + 1 < _params.length) buf.add("&");
 		}
 		
-		trace(buf);
-		
 		//Add signature
-		super.setParameter("Signature", base64Encode(hmac.calculate(Bytes.ofString(config.secretKey), Bytes.ofString(buf.toString()))));
-	}
-	
-	inline function base64Encode (b:Bytes):String {
-		var s = BASE_64.encodeBytes(b).toString();
-		s += switch (b.length % 3) {
-			case 1: "==";
-			case 2: "=";
-			default: "";
-		}
-		return s;
+		super.setParameter("Signature", hmac.calculate(Bytes.ofString(config.secretKey), Bytes.ofString(buf.toString())).base64PaddedEncode());
 	}
 	
 }

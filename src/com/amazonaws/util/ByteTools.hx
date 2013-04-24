@@ -8,20 +8,34 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
-package com.amazonaws.dynamodb;
+package com.amazonaws.util;
 
-import com.amazonaws.auth.IAMConfig;
+import haxe.BaseCode;
+import haxe.io.Bytes;
 
 /**
- * DynamoDB specific settings.
+ * Contains various utility methods for operating on bytes.
  * 
  * @author Sam MacPherson
  */
 
-class DynamoDBConfig extends IAMConfig {
+class ByteTools {
 
-	public function new (host:String, accessKey:String, secretKey:String, region:String) {
-		super(host, accessKey, secretKey, region, "dynamodb");
+	static inline var BASE64_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	
+	public static function base64PaddedEncode (bytes:Bytes):String {
+		var size = bytes.length % 3;
+		var suffix = "";
+		if (size == 1) {
+			suffix = "==";
+		} else if (size == 2) {
+			suffix = "=";
+		}
+		return BaseCode.encode(bytes.toString(), BASE64_CHARSET) + suffix;
+	}
+	
+	public static function base64PaddedDecode (str:String):Bytes {
+		return Bytes.ofString(BaseCode.decode(str.substr(0, str.indexOf("=")), BASE64_CHARSET));
 	}
 	
 }
