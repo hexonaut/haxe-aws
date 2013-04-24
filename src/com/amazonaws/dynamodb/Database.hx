@@ -8,8 +8,6 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
-
-
 package com.amazonaws.dynamodb;
 
 import com.amazonaws.auth.IAMConfig;
@@ -28,6 +26,22 @@ using DateTools;
 /**
  * Reaccuring types.
  */
+
+enum DynamoDBType {
+	STRING;
+	NUMBER;
+	BINARY;
+}
+
+typedef AttributeDefinition = {
+	name:String,
+	type:DynamoDBType
+}
+
+typedef PrimaryKeyDefinition = {
+	hash:AttributeDefinition,
+	?range:AttributeDefinition
+}
 
 typedef PrimaryKey = {
 	hash:Dynamic,
@@ -151,6 +165,21 @@ class Database {
 			a.push(mapKey(i));
 		}
 		return a;
+	}
+	
+	function mapAttributeDefinition (def:AttributeDefinition):Dynamic {
+		return { AttributeName:def.name, AttributeType:switch (def.type) {
+			case STRING: "S";
+			case NUMBER: "N";
+			case BINARY: "B";
+		} };
+	}
+	
+	function mapKeyDefinition (key:PrimaryKeyDefinition):Dynamic {
+		var obj = { };
+		Reflect.setField(obj, "HashKeyElement", mapAttributeDefinition(key.hash));
+		if (key.range != null) Reflect.setField(obj, "RangeKeyElement", mapAttributeDefinition(key.range));
+		return obj;
 	}
 	
 	function mapAttributeValue (data:Dynamic):Dynamic {
@@ -325,6 +354,21 @@ class Database {
 	}*/
 	
 	/**
+	 * Creates a table.
+	 * 
+	 * @param	table	The name of the table you want to create.
+	 * @param	key	The primary key definition for this table.
+	 * @param	readCapacity	The initial read capacity for this table.
+	 * @param	writeCapacity	The initial write capacity for this table.
+	 * @return	The details of this table.
+	 */
+	public function createTable (table:String, key:PrimaryKeyDefinition, ?readCapacity:Int = 1, ?writeCapacity:Int = 1):TableInfo {
+		var req = { TableName:table, KeySchema:mapKeyDefinition(key), ProvisionedThroughput:{ ReadCapacityUnits:readCapacity, WriteCapacityUnits:writeCapacity } };
+		
+		return new TableInfo(sendRequest(OP_CREATE_TABLE, req).TableDescription);
+	}
+	
+	/**
 	 * Delete an item from the database.
 	 * 
 	 * @param	table	The table name you want to delete an item from.
@@ -341,6 +385,17 @@ class Database {
 		var resp = sendRequest(OP_DELETE_ITEM, req);
 		if (returnOld) return buildAttributes(resp.Attributes);
 		else return null;
+	}
+	
+	/**
+	 * Deletes a table.
+	 * 
+	 * @param	table	The name of the table you want to delete.
+	 */
+	public function deleteTable (table:String):TableInfo {
+		var req = { TableName:table };
+		
+		return new TableInfo(sendRequest(OP_DELETE_TABLE, req).TableDescription);
 	}
 	
 	/**

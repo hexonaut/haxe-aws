@@ -8,8 +8,6 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
-
-
 package com.amazonaws.dynamodb;
 
 /**
@@ -38,7 +36,7 @@ class TableInfo {
 	public function new (?data:Dynamic) {
 		if (data != null) {
 			this.name = data.TableName;
-			this.created = Date.fromTime(data.CreationDateTime * 1000);
+			this.created = data.ProvisionedThroughput.CreationDateTime != null ? Date.fromTime(data.CreationDateTime * 1000) : null;
 			this.readCapacity = data.ProvisionedThroughput.ReadCapacityUnits;
 			this.writeCapacity = data.ProvisionedThroughput.WriteCapacityUnits;
 			this.lastDecrease = data.ProvisionedThroughput.LastDecreaseDateTime != null ? Date.fromTime(data.ProvisionedThroughput.LastDecreaseDateTime * 1000) : null;
