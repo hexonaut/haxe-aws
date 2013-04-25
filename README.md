@@ -15,7 +15,7 @@ DynamoDB Examples
 Using DynamoDB is fairly straight forward.
 
     var config = new com.amazonaws.dynamodb.DynamoDBConfig("dynamodb.us-east-1.amazonaws.com", "MYACCESSKEY", "MYSECRETKEY", "us-east-1");
-    var db = new com.amazonaws.dynamodb.Database(config);
+    var db = new com.amazonaws.dynamodb.DynamoDB(config);
 	
 	//Add 3 items to myTable
 	db.putItem("myTable", {id:0, rangeid:0 someVar:"Haxe Rocks!"});
@@ -62,7 +62,7 @@ You can also extend PersistantObject on your custom object to simplify usage. Be
 	}
 	
 	var config = new com.amazonaws.dynamodb.DynamoDBConfig("dynamodb.us-east-1.amazonaws.com", "MYACCESSKEY", "MYSECRETKEY", "us-east-1");
-    var db = new com.amazonaws.dynamodb.Database(config);
+    var db = new com.amazonaws.dynamodb.DynamoDB(config);
 	
 	PersistantObject.DATABASE = db;
 	PersistantObject.TABLE_PREFIX = "table_prefix_";
