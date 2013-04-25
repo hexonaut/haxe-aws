@@ -8,8 +8,6 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
-
-
 package com.amazonaws.dynamodb;
 
 /**
@@ -18,14 +16,14 @@ package com.amazonaws.dynamodb;
  * @author Sam MacPherson
  */
 
-import com.amazonaws.dynamodb.Database;
+import com.amazonaws.dynamodb.DynamoDB;
 import haxe.FastList;
 
 class Collection {
 	
 	static var AUTO_RETRIES_UPPER_LIMIT:Int = 64;		//If request fails after 64 seconds of waiting then give up
 	
-	public var db(default, null):Database;
+	public var db(default, null):DynamoDB;
 	public var table(default, null):String;
 	public var hashKey(default, null):Null<Dynamic>;
 	public var attributesToGet:Null<Array<String>>;
@@ -54,7 +52,7 @@ class Collection {
 	 * @param	?hashKey	If provided then a query will be performed on this key. If not then the whole database will be scanned.
 	 * @param	?options	Additional parameters.
 	 */
-	public function new (db:Database, table:String, ?hashKey:Dynamic, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }, ?lastEvaluatedKey:PrimaryKey) {
+	public function new (db:DynamoDB, table:String, ?hashKey:Dynamic, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }, ?lastEvaluatedKey:PrimaryKey) {
 		this.db = db;
 		this.table = table;
 		this.hashKey = hashKey;
@@ -93,7 +91,7 @@ class Collection {
 	 * @param	?options	Additional parameters.
 	 * @return	A collection.
 	 */
-	public static function query (db:Database, table:String, hashKey:Dynamic, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }, ?lastEvaluatedKey:PrimaryKey):Collection {
+	public static function query (db:DynamoDB, table:String, hashKey:Dynamic, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }, ?lastEvaluatedKey:PrimaryKey):Collection {
 		return new Collection(db, table, hashKey, options, lastEvaluatedKey);
 	}
 	
@@ -106,7 +104,7 @@ class Collection {
 	 * @param	?options	Additional parameters.
 	 * @return	A collection.
 	 */
-	public static function scan (db:Database, table:String, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }, ?lastEvaluatedKey:PrimaryKey):Collection {
+	public static function scan (db:DynamoDB, table:String, ?options:{ ?limit:Int, ?scanLimit:Int, ?scanForward:Bool, ?consistantRead:Bool, ?auto:Bool }, ?lastEvaluatedKey:PrimaryKey):Collection {
 		return new Collection(db, table, null, options, lastEvaluatedKey);
 	}
 	

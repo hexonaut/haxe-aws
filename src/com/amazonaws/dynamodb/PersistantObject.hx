@@ -16,7 +16,7 @@ package com.amazonaws.dynamodb;
  * @author Sam MacPherson
  */
 
-import com.amazonaws.dynamodb.Database;
+import com.amazonaws.dynamodb.DynamoDB;
 import haxe.io.Bytes;
 import haxe.rtti.Meta;
 import haxe.Serializer;
@@ -28,15 +28,15 @@ class PersistantObject {
 	
 	static var AUTO_RETRIES_UPPER_LIMIT:Int = 64;		//If request fails after 64 seconds of waiting then give up
 	
-	public static var DATABASE:Database = null;
+	public static var DATABASE:DynamoDB = null;
 	public static var TABLE_PREFIX:String = null;
 	
-	@ignore var __db:Database;
+	@ignore var __db:DynamoDB;
 	@ignore var __table:String;
 	@ignore var __hash:String;
 	@ignore var __range:String;
 
-	public function new (?dbObject:Dynamic, ?db:Database, ?table:String) {
+	public function new (?dbObject:Dynamic, ?db:DynamoDB, ?table:String) {
 		if (db != null) __db = db;
 		else __db = DATABASE;
 		
