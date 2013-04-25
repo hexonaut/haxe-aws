@@ -8,8 +8,6 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
-
-
 package com.amazonaws.elasticmapreduce;
 import com.amazonaws.auth.Sig2Http;
 import haxe.io.BytesOutput;
@@ -109,9 +107,11 @@ class ElasticMapReduce {
 		}
 	}
 
-	public function runJobFlow (name:String, steps:Array<Step>, master:InstanceGroup, ?core:InstanceGroup, ?task:InstanceGroup):Void {
+	public function runJobFlow (name:String, steps:Array<Step>, master:InstanceGroup, ?core:InstanceGroup, ?task:InstanceGroup, ?logPath:String):Void {
 		var params = new Hash<String>();
 		params.set("Name", name);
+		if (logPath != null) params.set("LogUri", "s3n://" + logPath);
+		if (config.amiVersion != null) params.set("AmiVersion", config.amiVersion);
 		
 		//Instance config
 		params.set("Instances.InstanceGroups.member.1.InstanceRole", "MASTER");

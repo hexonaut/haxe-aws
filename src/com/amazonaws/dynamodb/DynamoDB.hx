@@ -436,10 +436,12 @@ class DynamoDB {
 		var delay = 1;
 		var tables = new Array<String>();
 		var lastTableName:String = null;
-		while (true) {
+		do {
 			try {
 				var resp = listTables(null, lastTableName);
-				tables.concat(resp.tableNames);
+				for (i in resp.tableNames) {
+					tables.push(i);
+				}
 				lastTableName = resp.lastEvaluatedTableName;
 			} catch (e:DynamoDBException) {
 				if (delay > 64) throw "Failed to list all tables.";	//Fail after 64 seconds
@@ -447,7 +449,7 @@ class DynamoDB {
 				Sys.sleep(delay);
 				delay = delay << 1;
 			}
-		}
+		} while (lastTableName != null);
 		return tables;
 	}
 	

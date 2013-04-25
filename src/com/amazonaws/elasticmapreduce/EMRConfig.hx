@@ -19,6 +19,8 @@ import com.amazonaws.auth.IAMConfig;
  */
 
 class EMRConfig extends IAMConfig {
+	
+	public var amiVersion:String;
 
 	public function new (host:String, accessKey:String, secretKey:String, region:String) {
 		super(host, accessKey, secretKey, region, "elasticmapreduce");
