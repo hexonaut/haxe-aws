@@ -1,7 +1,7 @@
 haxe-aws
 ========
 
-A Haxe library for communicating with the Amazon AWS (http://www.amazonaws.com) backend. haxe-aws has only been tested on neko, but it is designed to be fully cross platform.
+A Haxe library for communicating with the Amazon AWS (http://www.amazonaws.com) backend. haxe-aws has only been tested on neko and cpp, but it is designed to be fully cross platform.
 
 Implemented services:
 

@@ -19,7 +19,6 @@ import haxe.BaseCode;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import haxe.Json;
-import sys.net.Socket;
 
 using com.amazonaws.util.ByteTools;
 using DateTools;

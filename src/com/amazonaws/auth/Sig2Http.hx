@@ -75,10 +75,10 @@ class Sig2Http extends Http {
 		//List all signed headers
 		var signedHeaders = new StringBuf();
 		
-		//Get the current date in UTC -- need to use some weird hacks to get this working cross platform :(
-		var now = Date.now().delta((Date.fromString("1970-01-01").getTime() / 1000 / 60 / 60).hours());
-		var daylightSavings = now.format("%Z").indexOf("Daylight") != -1;
-		if (daylightSavings) now = now.delta(( -1).hours());
+		//Get the current date in UTC -- need time accurate to the timezone and daylight savings
+		var now = Date.now();
+		now = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+		now = Date.now().delta(now.getTime() - 24. * 3600 * 1000 * Math.floor(now.getTime() / 24 / 3600 / 1000));
 		
 		//Add in additional query parameters
 		setParameter("AWSAccessKeyId", config.accessKey);

@@ -17,7 +17,6 @@ package com.amazonaws.dynamodb;
  */
 
 import com.amazonaws.dynamodb.DynamoDB;
-import haxe.FastList;
 
 class Collection {
 	
@@ -38,8 +37,8 @@ class Collection {
 	public var metrics(default, null): { consumedCapacityUnits:Int, count:Int, scannedCount:Int };
 	
 	var firstLoad:Bool;
-	var head:Null<FastCell<Attributes>>;
-	var tail:Null<FastCell<Attributes>>;
+	var head:Null<CollectionCell>;
+	var tail:Null<CollectionCell>;
 	var lastEvaluatedKey:Null<PrimaryKey>;
 	var counted:Int;
 	var delay:Int;
@@ -135,7 +134,7 @@ class Collection {
 		//Add items to the list
 		if (result.items != null) {
 			for (i in result.items) {
-				var node = new FastCell<Attributes>(i, null);
+				var node = new CollectionCell(i, null);
 				if (tail == null) {
 					head = node;
 					tail = node;
@@ -188,6 +187,18 @@ class Collection {
 		for (i in this) {
 		}
 		return metrics.count > limit && limit != 0 ? limit : metrics.count;
+	}
+	
+}
+
+private class CollectionCell {
+	
+	public var elt:Attribute;
+	public var next:CollectionCell;
+	
+	public function new (elt:Attribute, ?next:CollectionCell) {
+		this.elt = elt;
+		this.next = next;
 	}
 	
 }

@@ -40,7 +40,7 @@ class PersistantObject {
 		if (db != null) __db = db;
 		else __db = DATABASE;
 		
-		var meta = untyped Type.getClass(this).__meta__.obj;
+		var meta = Meta.getType(Type.getClass(this));
 		if (meta == null) throw "Meta tags required.";
 		if (table != null) __table = table;
 		else if (TABLE_PREFIX != null) __table = TABLE_PREFIX;
@@ -69,20 +69,12 @@ class PersistantObject {
 	}
 	
 	inline function __shouldIgnore (field:String):Bool {
-		var meta = { };
-		var subMeta = untyped Type.getClass(this).__meta__.fields;
-		for (i in Reflect.fields(subMeta)) {
-			Reflect.setField(meta, i, Reflect.field(subMeta, i));
-		}
-		var superMeta = untyped PersistantObject.__meta__.fields;
-		for (i in Reflect.fields(superMeta)) {
-			Reflect.setField(meta, i, Reflect.field(superMeta, i));
-		}
+		var meta = Meta.getFields(Type.getClass(this));
 		var fieldMeta = Reflect.field(meta, field);
 		if (fieldMeta != null) {
 			return Reflect.hasField(fieldMeta, "ignore");
 		} else {
-			return false;
+			return true;
 		}
 	}
 	
@@ -102,7 +94,8 @@ class PersistantObject {
 	}
 	
 	inline function __dbToHaxe (val:Dynamic, field:String):Dynamic {
-		var ref:String = Reflect.field(untyped Type.getClass(this).__meta__.fields, field).type[0];
+		var meta = Meta.getFields(Type.getClass(this));
+		var ref:String = Reflect.field(meta, field).type[0];
 		if (Std.is(val, String) || Std.is(val, Bytes)) {
 			//These are all fine as is
 			return val;
@@ -141,7 +134,7 @@ class PersistantObject {
 	}
 	
 	public function build (dbObject:Dynamic):Void {
-		for (i in Reflect.fields(untyped Type.getClass(this).prototype)) {
+		for (i in Reflect.fields(Meta.getFields(Type.getClass(this)))) {
 			var val = Reflect.field(dbObject, i);
 			if (!__shouldIgnore(i) && val != null) Reflect.setField(this, i, __dbToHaxe(val, i));
 		}
