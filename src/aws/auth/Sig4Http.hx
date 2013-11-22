@@ -8,12 +8,10 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
+package aws.auth;
 
-
-package com.amazonaws.auth;
-
-import chx.hash.HMAC;
-import chx.hash.Sha256;
+import haxe.crypto.Hmac;
+import haxe.crypto.Sha256;
 import haxe.Http;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
@@ -30,9 +28,6 @@ using StringTools;
  */
 
 class Sig4Http extends Http {
-	
-	static inline var sha256 = new Sha256();
-	static inline var hmac = new HMAC(sha256);
 	
 	var _params:Array<{param:String, value:String}>;
 	var _headers:Array<{header:String, values:Array<String>}>;
@@ -57,11 +52,13 @@ class Sig4Http extends Http {
 	/**
 	 * @inheritDoc
 	 */
-	public override function setParameter (param:String, value:String):Void {
+	public override function setParameter (param:String, value:String):Http {
 		super.setParameter(param, value);
 		
 		//Add in the parameter for future signing
 		_params.push( { param:param.urlEncode(), value:value.urlEncode() } );
+		
+		return this;
 	}
 	
 	function headerTrim (value:String):String {
@@ -112,11 +109,13 @@ class Sig4Http extends Http {
 	/**
 	 * @inheritDoc
 	 */
-	public override function setPostData (data:String):Void {
+	public override function setPostData (data:String):Http {
 		super.setPostData(data);
 		
 		setHeader("content-length", Std.string(data.length));
 		this._data = data;
+		
+		return this;
 	}
 	
 	/**
@@ -197,19 +196,20 @@ class Sig4Http extends Http {
 		buf.add("\n");
 		
 		//Add on payload hash
-		buf.add(sha256.calcHex(Bytes.ofString(_data)));
+		buf.add(Sha256.encode(_data));
 		
 		//Create the string to sign
 		var signBuf = new StringBuf();
 		signBuf.add("AWS4-HMAC-SHA256\n");
 		signBuf.add(now.format("%Y%m%dT%H%M%SZ") + "\n");
 		signBuf.add(config.buildCredentialString(now, false) + "\n");
-		signBuf.add(sha256.calcHex(Bytes.ofString(buf.toString())));
+		signBuf.add(Sha256.encode(buf.toString()));
 		
 		//Derive the signing key
-		var derivedKey = hmac.calculate(hmac.calculate(hmac.calculate(hmac.calculate(Bytes.ofString("AWS4" + config.secretKey), Bytes.ofString(now.format("%Y%m%d"))), Bytes.ofString(config.region)), Bytes.ofString(config.service)), Bytes.ofString("aws4_request"));
+		var hmac = new Hmac(SHA256);
+		var derivedKey = hmac.encode(hmac.encode(hmac.encode(hmac.encode(Bytes.ofString("AWS4" + config.secretKey), Bytes.ofString(now.format("%Y%m%d"))), Bytes.ofString(config.region)), Bytes.ofString(config.service)), Bytes.ofString("aws4_request"));
 		
-		var signature = hmac.calculate(derivedKey, Bytes.ofString(signBuf.toString())).toHex();
+		var signature = hmac.encode(derivedKey, Bytes.ofString(signBuf.toString())).toHex();
 		
 		if (post) {
 			super.setHeader("Authorization", "AWS4-HMAC-SHA256 Credential=" + config.buildCredentialString(now) + ", SignedHeaders=" + signedHeaders.toString() + ", Signature=" + signature);

@@ -8,44 +8,20 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
-
-
-package com.amazonaws.dynamodb;
+package aws.dynamodb;
 
 /**
- * Will attach additional type information to all subclasses of persistant object.
+ * Represents an error that the database can throw. Similar to DynamoDBError, but these requests should be retried.
+ * See http://docs.amazonwebservices.com/amazondynamodb/2011-12-05/developerguide/ErrorHandling.html
+ * 
  * @author Sam MacPherson
  */
 
-import haxe.macro.Context;
-import haxe.macro.Expr;
-import haxe.macro.Type;
-
-class PersistantObjectMacro {
-
-	@:macro public static function build ():Array<Field> {
-		var fields = Context.getBuildFields();
-		
-		for (i in fields) {
-			var name = getFieldType(i.kind);
-			if (name != null) i.meta.push({name:"type", params:[Context.makeExpr(name, i.pos)], pos:i.pos});
-		}
-		
-		return fields;
-	}
-	
-	static function getFieldType (f:FieldType):String {
-		return switch (f) {
-			case FVar(t, e):
-				switch (t) {
-					case TPath(p):
-						p.name;
-					default:
-						null;
-				}
-			default:
-				null;
-		}
-	}
-	
+enum DynamoDBException {
+	ProvisionedThroughputExceededException;
+	ThrottlingException;
+	InternalFailure;
+	InternalServerError;
+	ServiceUnavailableException;
+	ConnectionInterrupted;		//If JSON fails to fully load then this will be thrown
 }

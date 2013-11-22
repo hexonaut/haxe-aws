@@ -8,19 +8,18 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
-package com.amazonaws.dynamodb;
+package aws.dynamodb;
 
-import com.amazonaws.auth.IAMConfig;
-import com.amazonaws.auth.Sig4Http;
-import com.amazonaws.dynamodb.Collection;
-import com.amazonaws.dynamodb.DynamoDBError;
-import com.amazonaws.dynamodb.DynamoDBException;
-import haxe.BaseCode;
+import aws.auth.IAMConfig;
+import aws.auth.Sig4Http;
+import aws.dynamodb.Collection;
+import aws.dynamodb.DynamoDBError;
+import aws.dynamodb.DynamoDBException;
+import haxe.crypto.Base64;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import haxe.Json;
 
-using com.amazonaws.util.ByteTools;
 using DateTools;
 
 /**
@@ -52,7 +51,7 @@ typedef Attribute = Dynamic;
 
 typedef Attributes = Dynamic;
 
-typedef UpdateAttributes = Hash<{value:Attribute, ?action:String}>;
+typedef UpdateAttributes = Map<String, {value:Attribute, ?action:String}>;
 
 typedef ComparisonFunction = { values:Array<Dynamic>, op:String };
 
@@ -129,7 +128,7 @@ class DynamoDB {
 		} else if (Std.is(key, Float) || Std.is(key, Int)) {
 			return { N:Std.string(key)};
 		} else if (Std.is(key, Bytes)) {
-			return { B:cast(key, Bytes).base64PaddedEncode() };
+			return { B:Base64.encode(cast(key, Bytes)) };
 		} else {
 			throw "Invalid primary key type. Must be either String, Float, Int or haxe.io.Bytes.";
 		}
@@ -171,7 +170,7 @@ class DynamoDB {
 		} else if (Std.is(data, Float) || Std.is(data, Int)) {
 			return { N:Std.string(data) };
 		} else if (Std.is(data, Bytes)) {
-			return { B:cast(data, Bytes).base64PaddedEncode() };
+			return { B:Base64.encode(cast(data, Bytes)) };
 		} else if (Std.is(data, Array)) {
 			var arr:Array<Dynamic> = cast data;
 			if (arr.length > 0) {
@@ -183,7 +182,7 @@ class DynamoDB {
 				} else if (Std.is(firstElement, Bytes)) {
 					var a = new Array<String>();
 					for (i in cast(data, Array<Dynamic>)) {
-						a.push(cast(i, Bytes).base64PaddedEncode());
+						a.push(Base64.encode(cast(i, Bytes)));
 					}
 					return { BS:a };
 				} else {
@@ -510,7 +509,7 @@ class DynamoDB {
 	 * @param	?exclusiveStartKey	Will start the search from the element immediately proceeding this one.
 	 * @return	A list of results as well as some meta data. If count is true then only returns meta data.
 	 */
-	public function scan (table:String, ?filters:Hash<ComparisonFunction>, ?attributesToGet:Array<String>, ?scanLimit:Int = 0, ?count:Bool = false, ?exclusiveStartKey:PrimaryKey):QueryScanResult {
+	public function scan (table:String, ?filters:Map<String, ComparisonFunction>, ?attributesToGet:Array<String>, ?scanLimit:Int = 0, ?count:Bool = false, ?exclusiveStartKey:PrimaryKey):QueryScanResult {
 		var req = { TableName:table, Count:count };
 		if (filters != null) {
 			var scanFilters = { };

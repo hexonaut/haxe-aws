@@ -8,7 +8,7 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
-package com.amazonaws.dynamodb;
+package aws.dynamodb;
 
 /**
  * Loads in items from the database either via scan or query.
@@ -16,7 +16,7 @@ package com.amazonaws.dynamodb;
  * @author Sam MacPherson
  */
 
-import com.amazonaws.dynamodb.DynamoDB;
+import aws.dynamodb.DynamoDB;
 
 class Collection {
 	
@@ -27,7 +27,7 @@ class Collection {
 	public var hashKey(default, null):Null<Dynamic>;
 	public var attributesToGet:Null<Array<String>>;
 	public var rangeKeyComparisonFunction:Null<ComparisonFunction>;
-	public var filters:Null<Hash<ComparisonFunction>>;
+	public var filters:Null<Map<String, ComparisonFunction>>;
 	public var limit:Int;
 	public var scanLimit:Int;
 	public var doCount:Bool;

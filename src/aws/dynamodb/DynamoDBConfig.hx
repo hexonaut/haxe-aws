@@ -8,25 +8,20 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
+package aws.dynamodb;
 
-
-package com.amazonaws.dynamodb;
+import aws.auth.IAMConfig;
 
 /**
- * Represents an error that the database can throw.
- * See http://docs.amazonwebservices.com/amazondynamodb/2011-12-05/developerguide/ErrorHandling.html
+ * DynamoDB specific settings.
  * 
  * @author Sam MacPherson
  */
 
-enum DynamoDBError {
-	AccessDeniedException;
-	ConditionalCheckFailedException;
-	IncompleteSignatureException;
-	LimitExceededException;
-	MissingAuthenticationTokenException;
-	ResourceInUseException;
-	ResourceNotFoundException;
-	ValidationException;
-	RequestTooLarge;
+class DynamoDBConfig extends IAMConfig {
+
+	public function new (host:String, accessKey:String, secretKey:String, region:String) {
+		super(host, accessKey, secretKey, region, "dynamodb");
+	}
+	
 }

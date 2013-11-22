@@ -8,16 +8,16 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
-package com.amazonaws.auth;
+package aws.auth;
 
-import chx.hash.HMAC;
-import chx.hash.Sha256;
+import haxe.crypto.Base64;
+import haxe.crypto.Hmac;
+import haxe.crypto.Sha256;
 import haxe.Http;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import haxe.Utf8;
 
-using com.amazonaws.util.ByteTools;
 using DateTools;
 using StringTools;
 
@@ -29,9 +29,6 @@ using StringTools;
  */
 
 class Sig2Http extends Http {
-	
-	static inline var sha256 = new Sha256();
-	static inline var hmac = new HMAC(sha256);
 	
 	var _params:Array<{param:String, value:String}>;
 	var _headers:Array<{header:String, values:Array<String>}>;
@@ -56,11 +53,13 @@ class Sig2Http extends Http {
 	/**
 	 * @inheritDoc
 	 */
-	public override function setParameter (param:String, value:String):Void {
+	public override function setParameter (param:String, value:String):Http {
 		super.setParameter(param, value);
 		
 		//Add in the parameter for future signing
 		_params.push( { param:param.urlEncode(), value:value.urlEncode() } );
+		
+		return this;
 	}
 	
 	/**
@@ -109,7 +108,7 @@ class Sig2Http extends Http {
 		}
 		
 		//Add signature
-		super.setParameter("Signature", hmac.calculate(Bytes.ofString(config.secretKey), Bytes.ofString(buf.toString())).base64PaddedEncode());
+		super.setParameter("Signature", Base64.encode(new Hmac(SHA256).encode(Bytes.ofString(config.secretKey), Bytes.ofString(buf.toString()))));
 	}
 	
 }

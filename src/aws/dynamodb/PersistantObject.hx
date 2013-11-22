@@ -8,7 +8,7 @@
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ****/
 
-package com.amazonaws.dynamodb;
+package aws.dynamodb;
 
 /**
  * Simplifies storing and retrieving objects from the database.
@@ -16,14 +16,14 @@ package com.amazonaws.dynamodb;
  * @author Sam MacPherson
  */
 
-import com.amazonaws.dynamodb.DynamoDB;
+import aws.dynamodb.DynamoDB;
 import haxe.io.Bytes;
 import haxe.rtti.Meta;
 import haxe.Serializer;
 import haxe.Unserializer;
 import Type;
 
-#if !macro @:autoBuild(com.amazonaws.dynamodb.PersistantObjectMacro.build()) #end
+#if !macro @:autoBuild(aws.dynamodb.PersistantObjectMacro.build()) #end
 class PersistantObject {
 	
 	static var AUTO_RETRIES_UPPER_LIMIT:Int = 64;		//If request fails after 64 seconds of waiting then give up
