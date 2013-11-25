@@ -112,7 +112,7 @@ class Sig4Http extends Http {
 	public override function setPostData (data:String):Http {
 		super.setPostData(data);
 		
-		setHeader("content-length", Std.string(data.length));
+		//setHeader("content-length", Std.string(data.length));
 		this._data = data;
 		
 		return this;
