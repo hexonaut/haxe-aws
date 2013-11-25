@@ -1,6 +1,0 @@
-<project name="aws" url="https://github.com/Blank101/haxe-aws" license="MIT">
-	<user name="Blank101"/>
-    <tag v="cross"/>
-	<description>A Haxe library for communicating with the Amazon AWS (http://www.amazonaws.com) backend.</description>
-	<version name="0.2">Fixes</version>
-</project>
