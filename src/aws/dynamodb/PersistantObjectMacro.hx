@@ -23,7 +23,7 @@ import haxe.macro.Type;
 
 class PersistantObjectMacro {
 
-	@:macro public static function build ():Array<Field> {
+	macro public static function build ():Array<Field> {
 		var fields = Context.getBuildFields();
 		
 		for (i in fields) {

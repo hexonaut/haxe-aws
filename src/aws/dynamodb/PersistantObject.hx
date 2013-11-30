@@ -109,7 +109,7 @@ class PersistantObject {
 		} else if (Std.is(val, Float)) {
 			//Float may be either a Float or a Date
 			if (ref == "Date") {
-				return Date.fromTime(val);
+				return untyped Date.fromTime(val);
 			} else {
 				return val;
 			}

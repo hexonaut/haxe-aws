@@ -109,7 +109,7 @@ class ElasticMapReduce {
 	}
 
 	public function runJobFlow (name:String, steps:Array<Step>, master:InstanceGroup, ?core:InstanceGroup, ?task:InstanceGroup, ?logPath:String):Void {
-		var params = new Hash<String>();
+		var params = new Map<String, String>();
 		params.set("Name", name);
 		if (logPath != null) params.set("LogUri", "s3n://" + logPath);
 		if (config.amiVersion != null) params.set("AmiVersion", config.amiVersion);
@@ -156,7 +156,7 @@ class ElasticMapReduce {
 		sendRequest(ACTION_RUN_JOB_FLOW, params);
 	}
 	
-	function sendRequest (operation:String, params:Hash<String>):Dynamic {
+	function sendRequest (operation:String, params:Map<String, String>):Void {
 		var conn = new Sig2Http((config.ssl ? "https" : "http") + "://" + config.host + "/", config);
 		
 		conn.setParameter("Action", operation);
