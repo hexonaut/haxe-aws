@@ -5,7 +5,7 @@
   "description": "A Haxe library for communicating with the Amazon AWS (http://www.amazonaws.com) backend.",
   "contributors": ["Blank101"],
   "releasenote": "Moved to haxe3.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "url": "https://github.com/Blank101/haxe-aws",
   "dependencies": {
 

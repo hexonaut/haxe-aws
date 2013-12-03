@@ -207,9 +207,9 @@ class Sig4Http extends Http {
 		
 		//Derive the signing key
 		var hmac = new Hmac(SHA256);
-		var derivedKey = hmac.encode(hmac.encode(hmac.encode(hmac.encode(Bytes.ofString("AWS4" + config.secretKey), Bytes.ofString(now.format("%Y%m%d"))), Bytes.ofString(config.region)), Bytes.ofString(config.service)), Bytes.ofString("aws4_request"));
+		var derivedKey = hmac.make(hmac.make(hmac.make(hmac.make(Bytes.ofString("AWS4" + config.secretKey), Bytes.ofString(now.format("%Y%m%d"))), Bytes.ofString(config.region)), Bytes.ofString(config.service)), Bytes.ofString("aws4_request"));
 		
-		var signature = hmac.encode(derivedKey, Bytes.ofString(signBuf.toString())).toHex();
+		var signature = hmac.make(derivedKey, Bytes.ofString(signBuf.toString())).toHex();
 		
 		if (post) {
 			super.setHeader("Authorization", "AWS4-HMAC-SHA256 Credential=" + config.buildCredentialString(now) + ", SignedHeaders=" + signedHeaders.toString() + ", Signature=" + signature);

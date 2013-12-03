@@ -108,7 +108,7 @@ class Sig2Http extends Http {
 		}
 		
 		//Add signature
-		super.setParameter("Signature", Base64.encode(new Hmac(SHA256).encode(Bytes.ofString(config.secretKey), Bytes.ofString(buf.toString()))));
+		super.setParameter("Signature", Base64.encode(new Hmac(SHA256).make(Bytes.ofString(config.secretKey), Bytes.ofString(buf.toString()))));
 	}
 	
 }
