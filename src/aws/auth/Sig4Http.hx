@@ -133,7 +133,7 @@ class Sig4Http extends Http {
 		//Get the current date in UTC -- need time accurate to the timezone and daylight savings
 		var now = Date.now();
 		now = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-		now = Date.now().delta(now.getTime() - 24. * 3600 * 1000 * Math.floor(now.getTime() / 24 / 3600 / 1000));
+		now = Date.now().delta(now.getTime() - 24. * 3600 * 1000 * Math.round(now.getTime() / 24 / 3600 / 1000));
 		
 		//Add in additional query parameters and headers
 		addSigningHeader("host", config.host, false);
