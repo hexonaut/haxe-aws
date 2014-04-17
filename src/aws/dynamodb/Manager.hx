@@ -31,6 +31,10 @@ class Manager<T:sys.db.Object> {
 		}
 	}
 	
+	public macro function search (ethis, cond, ?options, ?consistent:haxe.macro.Expr.ExprOf<Bool>): #if macro haxe.macro.Expr #else haxe.macro.Expr.ExprOf<List<T>> #end {
+		return RecordMacros.macroSearch(ethis, cond, options, consistent);
+	}
+	
 	#if !macro
 	function getInfos ():DynamoDBInfos {
 		return untyped cls.__dynamodb_infos;
@@ -97,6 +101,12 @@ class Manager<T:sys.db.Object> {
 			ConsistentRead: consistent,
 			Key: dynkeys
 		}).Item);
+	}
+	
+	public function unsafeObjects (query:Dynamic, ?consistent:Bool = true):List<T> {
+		Reflect.setField(query, "TableName", getTableName());
+		Reflect.setField(query, "ConsistentRead", consistent);
+		return Lambda.map(cast(sendRequest("Query", query).Items, Array<Dynamic>), function (e) { return buildSpodObject(e); } );
 	}
 	
 	function formatError (httpCode:Int, type:String, message:String):Void {
