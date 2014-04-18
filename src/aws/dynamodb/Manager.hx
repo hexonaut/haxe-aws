@@ -2,14 +2,7 @@ package aws.dynamodb;
 
 import aws.dynamodb.DynamoDBError;
 import aws.dynamodb.DynamoDBException;
-
-typedef DynamoDBInfos = {
-	?prefix:String,
-	table:String,
-	?shard:String,
-	hash:String,
-	?range:String
-};
+import aws.dynamodb.RecordInfos;
 
 class Manager<T:sys.db.Object> {
 	
@@ -25,18 +18,19 @@ class Manager<T:sys.db.Object> {
 	}
 	
 	public macro function get (ethis, id, ?consistent:haxe.macro.Expr.ExprOf<Bool>): #if macro haxe.macro.Expr #else haxe.macro.Expr.ExprOf<T> #end {
-		return switch (id.expr) {
-			case EObjectDecl(_): macro $ethis.unsafeGetWithKeys($id, $consistent);
-			default: macro $ethis.unsafeGet($id, $consistent);
-		}
+		return RecordMacros.macroGet(ethis, id, consistent);
 	}
 	
 	public macro function search (ethis, cond, ?options, ?consistent:haxe.macro.Expr.ExprOf<Bool>): #if macro haxe.macro.Expr #else haxe.macro.Expr.ExprOf<List<T>> #end {
 		return RecordMacros.macroSearch(ethis, cond, options, consistent);
 	}
 	
+	public macro function select (ethis, cond, ?options, ?consistent:haxe.macro.Expr.ExprOf<Bool>): #if macro haxe.macro.Expr #else haxe.macro.Expr.ExprOf<List<T>> #end {
+		return RecordMacros.macroSearch(ethis, cond, options, consistent, true);
+	}
+	
 	#if !macro
-	function getInfos ():DynamoDBInfos {
+	function getInfos ():RecordInfos {
 		return untyped cls.__dynamodb_infos;
 	}
 	
@@ -79,7 +73,11 @@ class Manager<T:sys.db.Object> {
 		}
 		str += infos.table;
 		if (infos.shard != null) {
-			str += DateTools.format(Date.now(), infos.shard);
+			//Fill in temporal sharding with UTC time
+			var now = Date.now();
+			now = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+			now = DateTools.delta(Date.now(), now.getTime() - 24. * 3600 * 1000 * Math.round(now.getTime() / 24 / 3600 / 1000));
+			str += DateTools.format(now, infos.shard);
 		}
 		return str;
 	}
@@ -87,7 +85,7 @@ class Manager<T:sys.db.Object> {
 	public function unsafeGet (id:Dynamic, ?consistent:Bool = true):T {
 		var infos = getInfos();
 		var keys:Dynamic = { };
-		Reflect.setField(keys, infos.hash, id);
+		Reflect.setField(keys, infos.primaryIndex.hash.name, id);
 		return unsafeGetWithKeys(keys, consistent);
 	}
 	
