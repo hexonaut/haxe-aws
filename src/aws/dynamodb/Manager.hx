@@ -9,7 +9,9 @@ class Manager<T:sys.db.Object> {
 	static inline var SERVICE:String = "DynamoDB";
 	static inline var API_VERSION:String = "20120810";
 	
-	public static var config:DynamoDBConfig;
+	#if !macro
+	public static var cnx:Connection;
+	#end
 	
 	var cls:Class<T>;
 
@@ -94,7 +96,7 @@ class Manager<T:sys.db.Object> {
 		for (i in Reflect.fields(keys)) {
 			Reflect.setField(dynkeys, i, haxeToDynamo(Reflect.field(keys, i)));
 		}
-		return buildSpodObject(sendRequest("GetItem", {
+		return buildSpodObject(cnx.sendRequest("GetItem", {
 			TableName: getTableName(),
 			ConsistentRead: consistent,
 			Key: dynkeys
@@ -104,49 +106,7 @@ class Manager<T:sys.db.Object> {
 	public function unsafeObjects (query:Dynamic, ?consistent:Bool = true):List<T> {
 		Reflect.setField(query, "TableName", getTableName());
 		Reflect.setField(query, "ConsistentRead", consistent);
-		return Lambda.map(cast(sendRequest("Query", query).Items, Array<Dynamic>), function (e) { return buildSpodObject(e); } );
-	}
-	
-	function formatError (httpCode:Int, type:String, message:String):Void {
-		var type = type.substr(type.indexOf("#") + 1);
-		var message = message;
-		
-		if (httpCode == 413) throw RequestTooLarge;
-		for (i in Type.getEnumConstructs(DynamoDBError)) {
-			if (type == i) throw Type.createEnum(DynamoDBError, i);
-		}
-		for (i in Type.getEnumConstructs(DynamoDBException)) {
-			if (type == i) throw Type.createEnum(DynamoDBException, i);
-		}
-		
-		throw "Error: " + type + "\nMessage: " + message;
-	}
-	
-	function sendRequest (operation:String, payload:Dynamic):Dynamic {
-		var conn = new aws.auth.Sig4Http((config.ssl ? "https" : "http") + "://" + config.host + "/", config);
-		
-		conn.setHeader("content-type", "application/x-amz-json-1.0; charset=utf-8");
-		conn.setHeader("x-amz-target", SERVICE + "_" + API_VERSION + "." + operation);
-		conn.setPostData(haxe.Json.stringify(payload));
-		
-		var err = null;
-		conn.onError = function (msg:String):Void {
-			err = msg;
-		}
-		
-		var data = new haxe.io.BytesOutput();
-		conn.applySigning(true);
-		conn.customRequest(true, data);
-		var out:Dynamic;
-		try {
-			var str = data.getBytes().toString();
-			trace(str);
-			out = haxe.Json.parse(str);
-		} catch (e:Dynamic) {
-			throw ConnectionInterrupted;
-		}
-		if (err != null) formatError(Std.parseInt(err.substr(err.indexOf("#") + 1)), out.__type, out.message);
-		return out;
+		return Lambda.map(cast(cnx.sendRequest("Query", query).Items, Array<Dynamic>), function (e) { return buildSpodObject(e); } );
 	}
 	#end
 	
