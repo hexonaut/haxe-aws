@@ -16,6 +16,8 @@ typedef RecordIndex = {
 
 enum RecordType {
 	DString;
-	DNumber;
-	DBinary;
+	DFloat;
+	DInt;
+	DBool;
+	DDate;
 }

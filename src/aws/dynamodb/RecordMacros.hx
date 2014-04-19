@@ -106,10 +106,10 @@ class RecordMacros {
 							case TPath(p):
 								switch (p.name) {
 									case "String": type = macro DString;
-									case "Int": type = macro DNumber;
-									case "Float": type = macro DNumber;
-									case "Bool": type = macro DNumber;
-									case "Date": type = macro DNumber;
+									case "Int": type = macro DInt;
+									case "Float": type = macro DFloat;
+									case "Bool": type = macro DBool;
+									case "Date": type = macro DDate;
 									default:
 										Context.error("Invalid type.", i.pos);
 								}
@@ -278,11 +278,16 @@ class RecordMacros {
 		return { expr:EObjectDecl([{
 			field: switch (getFieldType(infos, field)) {
 				case DString: "S";
-				case DNumber:
+				case DFloat, DInt:
 					//Need to convert number to string
 					v = macro Std.string($v);
 					"N";
-				case DBinary: "B";
+				case DDate:
+					v = macro Std.string($v.getTime());
+					"N";
+				case DBool:
+					v = macro $v ? "1" : "0";
+					"N";
 			},
 			expr: v
 		}]), pos:v.pos};
@@ -423,14 +428,14 @@ class RecordMacros {
 			case TInst(t, _):
 				switch (t.toString()) {
 					case "String": failure = rt != DString;
-					case "Date": failure = rt != DNumber;
+					case "Date": failure = rt != DDate;
 					default:
 				}
 			case TAbstract(a, _):
 				switch (a.toString()) {
-					case "Int": failure = rt != DNumber;
-					case "Float": failure = rt != DNumber;
-					case "Bool": failure = rt != DNumber;
+					case "Int": failure = rt != DInt;
+					case "Float": failure = rt != DFloat;
+					case "Bool": failure = rt != DBool;
 					default:
 				}
 			default:

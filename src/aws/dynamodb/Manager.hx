@@ -4,6 +4,8 @@ import aws.dynamodb.DynamoDBError;
 import aws.dynamodb.DynamoDBException;
 import aws.dynamodb.RecordInfos;
 
+using Lambda;
+
 class Manager<T:sys.db.Object> {
 	
 	static inline var SERVICE:String = "DynamoDB";
@@ -39,20 +41,32 @@ class Manager<T:sys.db.Object> {
 	function haxeToDynamo (v:Dynamic):Dynamic {
 		return switch (Type.typeof(v)) {
 			case TFloat, TInt: { N:Std.string(v) };
+			case TBool: { N:v == true ? "1" : "0" };
 			case TClass(c):
 				switch (Type.getClassName(c)) {
 					case "String": { S:v };
-					default: throw "Unsupported type for DynamoDB.";
+					case "Date": { N:Std.string(cast(v, Date).getTime()) };
+					default: throw "Unsupported type for DynamoDB '" + Type.getClassName(c) + "'.";
 				}
-			default: throw "Unsupported type for DynamoDB.";
+			default: throw "Unsupported type for DynamoDB '" + Type.typeof(v) + "'.";
 		}
 	}
 	
-	function dynamoToHaxe (v:Dynamic):Dynamic {
+	function dynamoToHaxe (name:String, v:Dynamic):Dynamic {
+		var infos = getInfos();
+		
 		for (i in Reflect.fields(v)) {
-			switch (i) {
-				case "S": return Reflect.field(v, i);
-				case "N": return Std.parseFloat(Reflect.field(v, i));
+			var val = Reflect.field(v, i);
+			for (o in infos.fields) {
+				if (o.name == name) {
+					return switch (o.type) {
+						case DFloat: Std.parseFloat(v);
+						case DInt: Std.parseInt(v);
+						case DBool: v == "1";
+						case DDate: Date.fromTime(Std.parseFloat(v));
+						case DString: v;
+					};
+				}
 			}
 		}
 		
@@ -60,9 +74,11 @@ class Manager<T:sys.db.Object> {
 	}
 	
 	function buildSpodObject (item:Dynamic):T {
+		var infos = getInfos();
+		
 		var spod = Type.createEmptyInstance(cls);
 		for (i in Reflect.fields(item)) {
-			Reflect.setField(spod, i, dynamoToHaxe(Reflect.field(item, i)));
+			if (infos.fields.exists(function (e) { return e.name == i; } )) Reflect.setField(spod, i, dynamoToHaxe(i, Reflect.field(item, i)));
 		}
 		return spod;
 	}
@@ -107,6 +123,45 @@ class Manager<T:sys.db.Object> {
 		Reflect.setField(query, "TableName", getTableName());
 		Reflect.setField(query, "ConsistentRead", consistent);
 		return Lambda.map(cast(cnx.sendRequest("Query", query).Items, Array<Dynamic>), function (e) { return buildSpodObject(e); } );
+	}
+	
+	function buildRecordIndex (spod:T, index:RecordIndex):Dynamic {
+		var obj:Dynamic = { };
+		
+		var hash = Reflect.field(spod, index.hash.name);
+		if (hash == null) throw "Missing hash.";
+		Reflect.setField(obj, index.hash.name, haxeToDynamo(hash));
+		if (index.range != null) {
+			var range = Reflect.field(spod, index.range.name);
+			if (range == null) throw "Missing range.";
+			Reflect.setField(obj, index.range.name, haxeToDynamo(range));
+		}
+		
+		return obj;
+	}
+	
+	public function doInsert (obj:T):Void {
+		var infos = getInfos();
+		
+		var fields:Dynamic = { };
+		for (i in infos.fields) {
+			if (i.name != infos.primaryIndex.hash.name && i.name != infos.primaryIndex.range.name) {
+				Reflect.setField(fields, i.name, {
+					Action: "PUT",
+					Value: haxeToDynamo(Reflect.field(obj, i.name))
+				});
+			}
+		}
+		
+		cnx.sendRequest("UpdateItem", {
+			TableName: getTableName(),
+			Key: buildRecordIndex(obj, infos.primaryIndex),
+			AttributeUpdates: fields
+		});
+	}
+	
+	public function objectToString (obj:T):String {
+		return Std.string(obj);
 	}
 	#end
 	

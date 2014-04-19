@@ -105,6 +105,7 @@ class Connection {
 		conn.setHeader("content-type", "application/x-amz-json-1.0; charset=utf-8");
 		conn.setHeader("x-amz-target", SERVICE + "_" + API_VERSION + "." + operation);
 		conn.setPostData(Json.stringify(payload));
+		trace(Json.stringify(payload));
 		
 		var err = null;
 		conn.onError = function (msg:String):Void {
@@ -116,7 +117,9 @@ class Connection {
 		conn.customRequest(true, data);
 		var out:Dynamic;
 		try {
-			out = Json.parse(data.getBytes().toString());
+			var str = data.getBytes().toString();
+			trace(str);
+			out = Json.parse(str);
 		} catch (e:Dynamic) {
 			throw ConnectionInterrupted;
 		}
