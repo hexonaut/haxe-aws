@@ -61,11 +61,7 @@ class Manager<T:sys.db.Object> {
 				date = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
 				{t:"N", v:Std.string(date.getTime())};
 			case DDateTime: {t:"N", v:Std.string(cast(val, Date).getTime())};
-			case DTimeStamp:
-				var t = cast(val, Float);
-				//Add random precision if we need to
-				if (Math.ffloor(t) == t) t += Math.random() * 1000;
-				{t:"N", v:Std.string(t)};
+			case DTimeStamp: {t:"N", v:Std.string(val)};
 			case DBinary: {t:"B", v:Base64.encode(val)};
 			case DEnum(e): { t:"N", v:Std.string(val) };
 			case DSet(t):

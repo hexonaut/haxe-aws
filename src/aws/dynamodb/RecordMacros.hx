@@ -178,7 +178,7 @@ class RecordMacros {
 				args : [{ name : "_v", opt : false, type : ft, value : null }],
 				params : [],
 				ret : ft,
-				expr : macro { $efield = _v == null ? null : cast _v.getTime(); return _v; },
+				expr : macro { $efield = _v == null ? null : cast _v.getTime() + Math.random()*1000; return _v; },
 			};
 			fields.push( { name : "get_" + f.name, pos : pos, meta : meta, access : [APrivate], doc : null, kind : FFun(get) } );
 			fields.push( { name : "set_" + f.name, pos : pos, meta : meta, access : [APrivate], doc : null, kind : FFun(set) } );
