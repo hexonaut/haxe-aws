@@ -4,7 +4,7 @@
   "tags": ["cross"],
   "description": "A Haxe library for communicating with the Amazon AWS (http://www.amazonaws.com) backend.",
   "contributors": ["Blank101"],
-  "releasenote": "Changed DynamoDB interface to be compatible with SPOD.",
+  "releasenote": "Completely redesigned DynamoDB interface to mirror SPOD. Support for DynamoDB secondary indexes and more!",
   "version": "0.2.0",
   "url": "https://github.com/Blank101/haxe-aws",
   "dependencies": {

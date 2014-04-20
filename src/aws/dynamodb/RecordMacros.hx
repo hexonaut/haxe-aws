@@ -295,15 +295,15 @@ class RecordMacros {
 		}
 		var query = buildQuery(em, econd, eopt);
 		var pos = Context.currentPos();
-		var e = { expr : ECall( { expr : EField(em, "unsafeObjects"), pos : pos }, [query,defaultTrue(econsistent)]), pos : pos };
+		var e = { expr : ECall( { expr : EField(em, "unsafeObjects"), pos : pos }, [query,defaultFalse(econsistent)]), pos : pos };
 		if( single )
 			e = { expr : ECall( { expr : EField(e, "first"), pos : pos }, []), pos : pos };
 		return e;
 	}
 	
-	static function defaultTrue( e : Expr ) {
+	static function defaultFalse( e : Expr ) {
 		return switch( e.expr ) {
-		case EConst(CIdent("null")): { expr : EConst(CIdent("true")), pos : e.pos };
+		case EConst(CIdent("null")): { expr : EConst(CIdent("false")), pos : e.pos };
 		default: e;
 		}
 	}
