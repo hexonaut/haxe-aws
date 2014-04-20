@@ -293,7 +293,7 @@ class RecordMacros {
 				econsistent = tmp;
 			}
 		}
-		var query = buildQuery(em, econd, eopt);
+		var query = buildQuery(em, econd, eopt, single);
 		var pos = Context.currentPos();
 		var e = { expr : ECall( { expr : EField(em, "unsafeObjects"), pos : pos }, [query,defaultFalse(econsistent)]), pos : pos };
 		if( single )
@@ -317,7 +317,7 @@ class RecordMacros {
 		}
 	}
 	
-	static function buildQuery( em : Expr, econd : Expr, ?eopt : Expr ) {
+	static function buildQuery( em : Expr, econd : Expr, ?eopt : Expr, ?single ) {
 		var p = Context.currentPos();
 		var query = new Array<{field:String, expr:Expr}>();
 		var infos = getInfos(Context.typeof(em));
@@ -329,9 +329,9 @@ class RecordMacros {
 				rangeKey = exprToString(opt.orderBy.field);
 				query.push({field:"ScanIndexForward", expr:opt.orderBy.asc});
 			}
-			if( opt.limit != null ) {
-				query.push({field:"Limit", expr:opt.limit.len});
-				if ( opt.limit.pos != null ) {
+			if( opt.limit != null || single ) {
+				query.push({field:"Limit", expr:single ? macro 1 : opt.limit.len});
+				if ( opt.limit != null && opt.limit.pos != null ) {
 					query.push({field:"ExclusiveStartKey", expr:opt.limit.pos});
 				}
 			}
