@@ -122,7 +122,6 @@ class Connection {
 		conn.setHeader("x-amz-target", SERVICE + "_" + API_VERSION + "." + operation);
 		conn.setHeader("Connection", "Keep-Alive");
 		conn.setPostData(Json.stringify(payload));
-		trace(Json.stringify(payload, null, "\t"));
 		
 		var err = null;
 		conn.onError = function (msg:String):Void {
@@ -134,9 +133,7 @@ class Connection {
 		conn.customRequest(true, data, sock);
 		var out:Dynamic;
 		try {
-			var str = data.getBytes().toString();
-			trace(str);
-			out = Json.parse(str);
+			out = Json.parse(data.getBytes().toString());
 		} catch (e:Dynamic) {
 			throw ConnectionInterrupted;
 		}

@@ -365,6 +365,26 @@ class Manager<T:sys.db.Object> {
 	public function deleteTable (?shardDate:Date):Void {
 		cnx.sendRequest("DeleteTable", { TableName:getTableName(shardDate) } );
 	}
+	
+	public function tableExists (?shardDate:Date):Bool {
+		try {
+			cnx.sendRequest("DescribeTable", { TableName:getTableName(shardDate) } );
+			return true;
+		} catch (e:DynamoDBError) {
+			if (e == ResourceNotFoundException) {
+				return false;
+			} else {
+				#if neko
+				neko.Lib.rethrow(e);
+				#elseif cpp
+				cpp.Lib.rethrow(e);
+				#else
+				throw e;
+				#end
+				return null;
+			}
+		}
+	}
 	#end
 	
 }
