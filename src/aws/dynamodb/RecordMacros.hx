@@ -245,7 +245,7 @@ class RecordMacros {
 				var type = null;
 				
 				switch (i.kind) {
-					case FVar(t, _), FProp(_, _, t, _) if (!i.meta.exists(function (e) { return e.name == ":skip"; } )):
+					case FVar(t, _), FProp(_, _, t, _) if (!i.meta.exists(function (e) { return e.name == ":skip" || e.name == ":relation"; } )):
 						type = complexTypeToRecordTypeExpr(t, i.pos);
 					default:
 				}
@@ -581,7 +581,9 @@ class RecordMacros {
 			case TInst(t, _):
 				switch (t.toString()) {
 					case "String": failure = rt != DString;
-					case "Date": failure = rt != DDate;
+					case "Date": failure = rt != DDate && rt != DDateTime && rt != DTimeStamp;
+					case "haxe.io.Bytes": failure = rt != DBinary;
+					case "List": failure = std.Type.enumConstructor(rt) != "DSet";
 					default:
 				}
 			case TAbstract(a, _):
@@ -591,6 +593,8 @@ class RecordMacros {
 					case "Bool": failure = rt != DBool;
 					default:
 				}
+			case TEnum(e, _):
+				failure = std.Type.enumConstructor(rt) != "DEnum";
 			default:
 		}
 		
