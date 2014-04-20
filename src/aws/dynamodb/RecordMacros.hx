@@ -14,41 +14,17 @@ class RecordMacros {
 	
 	static function exprToString (expr:Expr):String {
 		var p = Context.currentPos();
-		
 		return switch (expr.expr) {
 			case EConst(c):
 				switch (c) {
 					case CIdent(s), CString(s):
 						return s;
 					default:
-						throw "Metadata should be identifier.";
+						throw "Expr should be identifier.";
 				}
 			default:
-				throw "Metadata should be identifier.";
+				throw "Expr should be identifier.";
 		};
-	}
-	
-	static function getRecordIndex (meta:MetaAccess, expr:Expr):{ name:String, type:RecordType } {
-		var name = exprToString(expr);
-		var type = null;
-		for (i in meta.get()) {
-			if (i.name == ":type_" + i.name) {
-				switch (i.params[0].expr) {
-					case EConst(c):
-						switch (c) {
-							case CIdent(s):
-								type = std.Type.createEnum(RecordType, s);
-							default:
-								throw "Invalid type.";
-						}
-					default:
-						throw "Invalid type.";
-				}
-				
-				break;
-			}
-		}
-		return { name:name, type:type };
 	}
 	
 	static function metaToInfos (meta:MetaAccess):RecordInfos {
@@ -61,17 +37,29 @@ class RecordMacros {
 				case ":shard": obj.shard = exprToString(i.params[0]);
 				case ":id":
 					var key:Dynamic = { };
-					key.hash = getRecordIndex(meta, i.params[0]);
-					if (i.params.length > 1) key.range = getRecordIndex(meta, i.params[1]);
+					key.hash = exprToString(i.params[0]);
+					if (i.params.length > 1) key.range = exprToString(i.params[1]);
 					obj.primaryIndex = key;
-				case ":sindex":
+				case ":index":
 					var key:Dynamic = { };
-					key.hash = getRecordIndex(meta, i.params[1]);
-					if (i.params.length > 2) key.range = getRecordIndex(meta, i.params[2]);
+					key.hash = exprToString(i.params[1]);
+					if (i.params.length > 2) key.range = exprToString(i.params[2]);
 					obj.indexes.push({name:exprToString(i.params[0]), index:key});
 				default:
 					if (i.name.startsWith(":type_")) {
-						obj.fields.push({ name:i.name.substr(":type_".length), type:std.Type.createEnum(RecordType, exprToString(i.params[0])) });
+						var name = null;
+						var params = null;
+						switch (i.params[0].expr) {
+							case EConst(c):
+								name = exprToString(i.params[0]);
+							case ECall(e, p):
+								name = exprToString(e);
+								params = p.map(function (e) { return null; } );
+							default:
+								throw "Invalid type.";
+						}
+						
+						obj.fields.push({ name:i.name.substr(":type_".length), type:std.Type.createEnum(RecordType, name, params) });
 					}
 			}
 		}
@@ -79,10 +67,97 @@ class RecordMacros {
 		return obj;
 	}
 	
+	static function fillTypes (meta:MetaAccess, e:Expr):Expr {
+		switch (e.expr) {
+			case EObjectDecl(f):
+				for (i in f) {
+					if (i.field == "fields") {
+						switch (i.expr.expr) {
+							case EArrayDecl(a):
+								for (o in a) {
+									switch (o.expr) {
+										case EObjectDecl(f):
+											var name = null;
+											for (i in f) {
+												if (i.field == "name") {
+													name = exprToString(i.expr);
+												}
+											}
+											for (i in f) {
+												if (i.field == "type") {
+													switch (i.expr.expr) {
+														case ECall(e, p):
+															for (m in meta.get()) {
+																if (m.name == ":type_" + name) {
+																	switch (m.params[0].expr) {
+																		case ECall(_, params):
+																			p[0] = params[0];
+																		default:
+																	}
+																	
+																	break;
+																}
+															}
+														default:
+													}
+													
+													break;
+												}
+											}
+										default:
+									}
+								}
+							default:
+						}
+						
+						break;
+					}
+				}
+			default:
+		}
+		
+		return e;
+	}
+	
+	static function complexTypeToRecordTypeExpr (t:ComplexType, pos):Expr {
+		return switch (t) {
+			case TPath(p):
+				switch (p.name) {
+					case "String", "SString": macro DString;
+					case "Int", "SInt": macro DInt;
+					case "Float", "SFloat": macro DFloat;
+					case "Bool", "SBool": macro DBool;
+					case "SDate": macro DDate;
+					case "Date", "SDateTime": macro DDateTime;
+					case "STimeStamp": macro DTimeStamp;
+					case "SBinary", "Bytes": macro DBinary;
+					case "SEnum": macro DEnum(${
+						switch (p.params[0]) {
+							case TPType(ct):
+								{ expr:EConst(CIdent(switch (ct) { case TPath(tp): tp.name; default: Context.error("Invalid type.", pos); ""; } )), pos:pos }
+							case TPExpr(e):
+								e;
+							}
+						});
+					case "SSet": macro DSet(${complexTypeToRecordTypeExpr(switch (p.params[0]) {
+							case TPType(ct): ct;
+							case TPExpr(e): Context.error("Invalid type.", e.pos);
+						}, pos)});
+					default:
+						Context.error("Invalid type.", pos);
+					}
+				default:
+					Context.error("Invalid type.", pos);
+		}
+	}
+	
 	public static function macroBuild ():Array<Field> {
 		var cls = Context.getLocalClass().get();
 		var fields = Context.getBuildFields();
 		var p = Context.currentPos();
+		
+		//Prevent sys.db.Object autobuild macro from building on this object
+		cls.meta.add(":skip", [], p);
 		
 		for (i in fields) {
 			if (i.name == "manager") {
@@ -102,20 +177,7 @@ class RecordMacros {
 				
 				switch (i.kind) {
 					case FVar(t, _), FProp(_, _, t, _) if (!i.meta.exists(function (e) { return e.name == ":skip"; } )):
-						switch (t) {
-							case TPath(p):
-								switch (p.name) {
-									case "String": type = macro DString;
-									case "Int": type = macro DInt;
-									case "Float": type = macro DFloat;
-									case "Bool": type = macro DBool;
-									case "Date": type = macro DDate;
-									default:
-										Context.error("Invalid type.", i.pos);
-								}
-							default:
-								Context.error("Invalid type.", i.pos);
-						}
+						type = complexTypeToRecordTypeExpr(t, i.pos);
 					default:
 				}
 				
@@ -125,7 +187,7 @@ class RecordMacros {
 		
 		var infos = metaToInfos(cls.meta);
 		fields.push( { name:"__dynamodb_infos", meta:[], access:[AStatic], pos:p, kind:FVar(null, 
-			Context.makeExpr(infos, p)
+			fillTypes(cls.meta, Context.makeExpr(infos, p))
 		) });
 		
 		return fields;
@@ -142,7 +204,7 @@ class RecordMacros {
 				
 				macro $em.unsafeGetWithKeys($id, $consistent);
 			default:
-				checkType(Context.typeof(id), infos.primaryIndex.hash.name, infos, id.pos);
+				checkType(Context.typeof(id), infos.primaryIndex.hash, infos, id.pos);
 				
 				macro $em.unsafeGet($id, $consistent);
 		}
@@ -203,7 +265,7 @@ class RecordMacros {
 			}
 		}
 		
-		var condResult = buildCond(econd, infos);
+		var condResult = buildCond(em, econd, infos, rangeKey);
 		query.push( { field:"KeyConditions", expr:condResult.expr } );
 		if (rangeKey != condResult.range && rangeKey != null) Context.error("orderBy field must match the range field in the conditional.", eopt.pos);
 		if (condResult.index != null) query.push( { field:"IndexName", expr:Context.makeExpr(condResult.index, p) } );
@@ -242,7 +304,7 @@ class RecordMacros {
 			case EConst(c):
 				return { len:limit };
 			case EArrayDecl(a):
-				checkType(Context.typeof(a[0]), orderBy.field != null ? exprToString(orderBy.field) : infos.primaryIndex.range.name, infos, p);
+				checkType(Context.typeof(a[0]), orderBy.field != null ? exprToString(orderBy.field) : infos.primaryIndex.range, infos, p);
 				
 				return { pos:a[0], len:a[1] };
 			default:
@@ -257,7 +319,7 @@ class RecordMacros {
 			case EConst(c):
 				switch (c) {
 					case CIdent(s):
-						if (s == infos.primaryIndex.range.name || infos.indexes.exists(function (e) { return s == e.index.range.name; } )) {
+						if (s == infos.primaryIndex.range || infos.indexes.exists(function (e) { return s == e.index.range; } )) {
 							return { field:Context.makeExpr(s, p), asc:macro true };
 						} else {
 							Context.error("orderBy field must be a range key for some index.", p);
@@ -274,53 +336,53 @@ class RecordMacros {
 		return null;
 	}
 	
-	static function buildType (field:String, v:Expr, infos:RecordInfos):Expr {
+	static function buildType (em:Expr, field:String, v:Expr, infos:RecordInfos):Expr {
+		var fname = switch (getFieldType(infos, field)) {
+			case DString: "S";
+			case DBinary: "B";
+			case DSet(t):
+				switch (t) {
+					case DString: "SS";
+					case DBinary: "BS";
+					default: "NS";
+				}
+			default: "N";
+		};
+		v = macro Reflect.field($em.haxeToDynamo(${Context.makeExpr(field, v.pos)}, $v), ${Context.makeExpr(fname, v.pos)});
 		return { expr:EObjectDecl([{
-			field: switch (getFieldType(infos, field)) {
-				case DString: "S";
-				case DFloat, DInt:
-					//Need to convert number to string
-					v = macro Std.string($v);
-					"N";
-				case DDate:
-					v = macro Std.string($v.getTime());
-					"N";
-				case DBool:
-					v = macro $v ? "1" : "0";
-					"N";
-			},
+			field: fname,
 			expr: v
 		}]), pos:v.pos};
 	}
 	
-	static function buildComp (field:String, v:Expr, infos:RecordInfos, op:String):Expr {
+	static function buildComp (em:Expr, field:String, v:Expr, infos:RecordInfos, op:String):Expr {
 		checkType(Context.typeof(v), field, infos, v.pos);
 		
 		var fields = new Array<{field:String, expr:Expr}>();
 		
 		fields.push( { field:"ComparisonOperator", expr:Context.makeExpr(op, v.pos) } );
 		fields.push( { field:"AttributeValueList", expr: { expr:EArrayDecl([
-			buildType(field, v, infos)
+			buildType(em, field, v, infos)
 		]), pos:v.pos } } );
 		
 		return { expr:EObjectDecl(fields), pos:v.pos };
 	}
 	
-	static function buildBinOp (fields:Array<{field:String, expr:Expr}>, infos:RecordInfos, op:Binop, e1:Expr, e2:Expr, p):Void {
+	static function buildBinOp (em:Expr, fields:Array<{field:String, expr:Expr}>, infos:RecordInfos, op:Binop, e1:Expr, e2:Expr, p):Void {
 		var comp = null;
 		
 		switch (op) {
 			case OpBoolAnd:
 				switch (e1.expr) {
 					case EBinop(op, e1, e2):
-						buildBinOp(fields, infos, op, e1, e2, e1.pos);
+						buildBinOp(em, fields, infos, op, e1, e2, e1.pos);
 					default:
 						Context.error("Bad condition. Must be AND-delimited simple comparison on range field.", p);
 						return;
 				}
 				switch (e2.expr) {
 					case EBinop(op, e1, e2):
-						buildBinOp(fields, infos, op, e1, e2, e2.pos);
+						buildBinOp(em, fields, infos, op, e1, e2, e2.pos);
 					default:
 						Context.error("Bad condition. Must be AND-delimited simple comparison on range field.", p);
 						return;
@@ -362,7 +424,7 @@ class RecordMacros {
 			return;
 		}
 		
-		fields.push( { field:field, expr:buildComp(field, expr, infos, comp) } );
+		fields.push( { field:field, expr:buildComp(em, field, expr, infos, comp) } );
 	}
 	
 	static function isEq (expr:Expr):Bool {
@@ -379,7 +441,7 @@ class RecordMacros {
 		return false;
 	}
 	
-	static function buildCond (cond:Expr, infos:RecordInfos):{expr:Expr, range:String, ?index:String} {
+	static function buildCond (em:Expr, cond:Expr, infos:RecordInfos, ?orderBy:String):{expr:Expr, range:String, ?index:String} {
 		var p = cond.pos;
 		var fields = new Array<{field:String, expr:Expr}>();
 		var hash = null;
@@ -389,31 +451,50 @@ class RecordMacros {
 		switch (cond.expr) {
 			case EObjectDecl(f):
 				for (i in f) {
-					fields.push( { field:i.field, expr:buildComp(i.field, i.expr, infos, "EQ") } );
+					fields.push( { field:i.field, expr:buildComp(em, i.field, i.expr, infos, "EQ") } );
 				}
 			case EBinop(op, e1, e2):
-				buildBinOp(fields, infos, op, e1, e2, cond.pos);
+				buildBinOp(em, fields, infos, op, e1, e2, cond.pos);
 			default:
 				Context.error("Bad condition. Must be AND-delimited simple comparison on table/index fields.", p);
 		}
 		
 		for (i in fields) {
-			if (isEq(i.expr)) {
+			if (isEq(i.expr) && hash == null) {
 				hash = i.field;
 			} else {
 				range = i.field;
 			}
 		}
 		
-		if (infos.primaryIndex.hash.name != hash || infos.primaryIndex.range.name != range) {
+		//Pull range info from orderBy clause
+		if (range == null) range = orderBy;
+		
+		if (infos.primaryIndex.hash != hash || infos.primaryIndex.range != range) {
 			for (i in infos.indexes) {
-				if (i.index.hash.name == hash && i.index.range.name == range) {
+				if (i.index.hash == hash && i.index.range == range) {
 					index = i.name;
 					break;
 				}
 			}
 			
-			if (index == null) Context.error("Could not match condition to an index.", cond.pos);
+			if (index == null) {
+				//No exact match -- if range is null then try partial match
+				if (range == null) {
+					if (infos.primaryIndex.hash != hash) {
+						for (i in infos.indexes) {
+							if (i.index.hash == hash) {
+								index = i.name;
+								break;
+							}
+						}
+						
+						if (index == null) Context.error("Could not match condition to an index.", cond.pos);
+					}
+				} else {
+					Context.error("Could not match condition to an index.", cond.pos);
+				}
+			}
 		}
 		
 		return {expr:{ expr:EObjectDecl(fields), pos:p }, range:range, index:index };

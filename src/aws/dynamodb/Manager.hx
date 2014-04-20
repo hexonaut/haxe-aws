@@ -3,6 +3,7 @@ package aws.dynamodb;
 import aws.dynamodb.DynamoDBError;
 import aws.dynamodb.DynamoDBException;
 import aws.dynamodb.RecordInfos;
+import haxe.crypto.Base64;
 
 using Lambda;
 
@@ -38,36 +39,83 @@ class Manager<T:sys.db.Object> {
 		return untyped cls.__dynamodb_infos;
 	}
 	
-	function haxeToDynamo (v:Dynamic):Dynamic {
-		return switch (Type.typeof(v)) {
-			case TFloat, TInt: { N:Std.string(v) };
-			case TBool: { N:v == true ? "1" : "0" };
-			case TClass(c):
-				switch (Type.getClassName(c)) {
-					case "String": { S:v };
-					case "Date": { N:Std.string(cast(v, Date).getTime()) };
-					default: throw "Unsupported type for DynamoDB '" + Type.getClassName(c) + "'.";
-				}
-			default: throw "Unsupported type for DynamoDB '" + Type.typeof(v) + "'.";
+	function getFieldType (name:String):RecordType {
+		var infos = getInfos();
+		
+		for (i in infos.fields) {
+			if (i.name == name) {
+				return i.type;
+			}
 		}
+		
+		return null;
 	}
 	
-	function dynamoToHaxe (name:String, v:Dynamic):Dynamic {
+	function encodeVal (val:Dynamic, type:RecordType):{t:String, v:Dynamic} {
+		return switch (type) {
+			case DString: {t:"S", v:val};
+			case DFloat, DInt: {t:"N", v:Std.string(val)};
+			case DBool: {t:"N", v:(val ? "1" : "0")};
+			case DDate:
+				var date = cast(val, Date);
+				date = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+				{t:"N", v:Std.string(date.getTime())};
+			case DDateTime: {t:"N", v:Std.string(cast(val, Date).getTime())};
+			case DTimeStamp:
+				var t = cast(val, Date).getTime();
+				//Add random precision if we need to
+				if (Math.ffloor(t) == t) t += Math.random() * 1000;
+				{t:"N", v:Std.string(t)};
+			case DBinary: {t:"B", v:Base64.encode(val)};
+			case DEnum(e): { t:"N", v:Std.string(val) };
+			case DSet(t):
+				var dtype = switch (t) {
+					case DString: "SS";
+					case DBinary: "BS";
+					default: "NS";
+				}
+				var list = new Array<Dynamic>();
+				for (i in cast(val, List<Dynamic>)) {
+					list.push(encodeVal(i, t).v);
+				}
+				if (list.length == 0) throw "Set must contain at least one value.";
+				{t:dtype, v:list};
+		};
+	}
+	
+	public function haxeToDynamo (name:String, v:Dynamic):Dynamic {
+		var obj:Dynamic = { };
+		var ev = encodeVal(v, getFieldType(name));
+		
+		Reflect.setField(obj, ev.t, ev.v);
+		
+		return obj;
+	}
+	
+	function decodeVal (val:Dynamic, type:RecordType):Dynamic {
+		return switch (type) {
+			case DString: val;
+			case DFloat: Std.parseFloat(val);
+			case DInt: Std.parseInt(val);
+			case DBool: val == "1";
+			case DDate, DDateTime, DTimeStamp: Date.fromTime(Std.parseFloat(val));
+			case DBinary: Base64.decode(val);
+			case DEnum(e): Std.parseInt(val);
+			case DSet(t):
+				var list = new List<Dynamic>();
+				for (i in cast(val, Array<Dynamic>)) {
+					list.add(decodeVal(i, t));
+				}
+				list;
+		};
+	}
+	
+	public function dynamoToHaxe (name:String, v:Dynamic):Dynamic {
 		var infos = getInfos();
 		
 		for (i in Reflect.fields(v)) {
 			var val = Reflect.field(v, i);
-			for (o in infos.fields) {
-				if (o.name == name) {
-					return switch (o.type) {
-						case DFloat: Std.parseFloat(v);
-						case DInt: Std.parseInt(v);
-						case DBool: v == "1";
-						case DDate: Date.fromTime(Std.parseFloat(v));
-						case DString: v;
-					};
-				}
-			}
+			return decodeVal(val, getFieldType(name));
 		}
 		
 		throw "Unknown DynamoDB type.";
@@ -76,7 +124,7 @@ class Manager<T:sys.db.Object> {
 	function buildSpodObject (item:Dynamic):T {
 		var infos = getInfos();
 		
-		var spod = Type.createEmptyInstance(cls);
+		var spod = Type.createInstance(cls, []);
 		for (i in Reflect.fields(item)) {
 			if (infos.fields.exists(function (e) { return e.name == i; } )) Reflect.setField(spod, i, dynamoToHaxe(i, Reflect.field(item, i)));
 		}
@@ -100,17 +148,17 @@ class Manager<T:sys.db.Object> {
 		return str;
 	}
 	
-	public function unsafeGet (id:Dynamic, ?consistent:Bool = true):T {
+	public function unsafeGet (id:Dynamic, ?consistent:Bool = false):T {
 		var infos = getInfos();
 		var keys:Dynamic = { };
-		Reflect.setField(keys, infos.primaryIndex.hash.name, id);
+		Reflect.setField(keys, infos.primaryIndex.hash, id);
 		return unsafeGetWithKeys(keys, consistent);
 	}
 	
-	public function unsafeGetWithKeys (keys:Dynamic, ?consistent:Bool = true):T {
+	public function unsafeGetWithKeys (keys:Dynamic, ?consistent:Bool = false):T {
 		var dynkeys:Dynamic = { };
 		for (i in Reflect.fields(keys)) {
-			Reflect.setField(dynkeys, i, haxeToDynamo(Reflect.field(keys, i)));
+			Reflect.setField(dynkeys, i, haxeToDynamo(i, Reflect.field(keys, i)));
 		}
 		return buildSpodObject(cnx.sendRequest("GetItem", {
 			TableName: getTableName(),
@@ -119,49 +167,98 @@ class Manager<T:sys.db.Object> {
 		}).Item);
 	}
 	
-	public function unsafeObjects (query:Dynamic, ?consistent:Bool = true):List<T> {
+	public function unsafeObjects (query:Dynamic, ?consistent:Bool = false):List<T> {
 		Reflect.setField(query, "TableName", getTableName());
 		Reflect.setField(query, "ConsistentRead", consistent);
 		return Lambda.map(cast(cnx.sendRequest("Query", query).Items, Array<Dynamic>), function (e) { return buildSpodObject(e); } );
 	}
 	
-	function buildRecordIndex (spod:T, index:RecordIndex):Dynamic {
+	function checkKeyExists (spod:T, index:RecordIndex):Void {
+		if (Reflect.field(spod, index.hash) == null) throw "Missing hash.";
+		if (index.range != null) {
+			if (Reflect.field(spod, index.range) == null) throw "Missing range.";
+		}
+	}
+	
+	function buildRecordExpected (spod:T, index:RecordIndex, exists:Bool):Dynamic {
 		var obj:Dynamic = { };
 		
-		var hash = Reflect.field(spod, index.hash.name);
-		if (hash == null) throw "Missing hash.";
-		Reflect.setField(obj, index.hash.name, haxeToDynamo(hash));
+		var hash = { Exists:exists };
+		if (exists) Reflect.setField(hash, "Value", haxeToDynamo(index.hash, Reflect.field(spod, index.hash)));
+		Reflect.setField(obj, index.hash, hash);
 		if (index.range != null) {
-			var range = Reflect.field(spod, index.range.name);
-			if (range == null) throw "Missing range.";
-			Reflect.setField(obj, index.range.name, haxeToDynamo(range));
+			var range = { Exists:exists };
+			if (exists) Reflect.setField(range, "Value", haxeToDynamo(index.range, Reflect.field(spod, index.range)));
+			Reflect.setField(obj, index.range, range);
 		}
 		
 		return obj;
 	}
 	
-	public function doInsert (obj:T):Void {
+	function buildFields (spod:T):Dynamic {
 		var infos = getInfos();
-		
 		var fields:Dynamic = { };
+		
 		for (i in infos.fields) {
-			if (i.name != infos.primaryIndex.hash.name && i.name != infos.primaryIndex.range.name) {
-				Reflect.setField(fields, i.name, {
-					Action: "PUT",
-					Value: haxeToDynamo(Reflect.field(obj, i.name))
-				});
+			var v = Reflect.field(spod, i.name);
+			if (v != null) {
+				if (Std.is(v, String) && cast(v, String).length == 0) throw "String values must have length greater than 0.";
+				
+				Reflect.setField(fields, i.name, haxeToDynamo(i.name, v));
 			}
 		}
 		
-		cnx.sendRequest("UpdateItem", {
+		return fields;
+	}
+	
+	public function doInsert (obj:T):Void {
+		var infos = getInfos();
+		checkKeyExists(obj, infos.primaryIndex);
+		
+		cnx.sendRequest("PutItem ", {
 			TableName: getTableName(),
-			Key: buildRecordIndex(obj, infos.primaryIndex),
-			AttributeUpdates: fields
+			Expected: buildRecordExpected(obj, infos.primaryIndex, false),
+			Item: buildFields(obj)
 		});
 	}
 	
-	public function objectToString (obj:T):String {
-		return Std.string(obj);
+	public function doUpdate (obj:T):Void {
+		var infos = getInfos();
+		checkKeyExists(obj, infos.primaryIndex);
+		
+		cnx.sendRequest("PutItem ", {
+			TableName: getTableName(),
+			Expected: buildRecordExpected(obj, infos.primaryIndex, true),
+			Item: buildFields(obj)
+		});
+	}
+	
+	public function doPut (obj:T):Void {
+		var infos = getInfos();
+		checkKeyExists(obj, infos.primaryIndex);
+		
+		cnx.sendRequest("PutItem ", {
+			TableName: getTableName(),
+			Item: buildFields(obj)
+		});
+	}
+	
+	public function doDelete (obj:T):Void {
+		var infos = getInfos();
+		checkKeyExists(obj, infos.primaryIndex);
+		
+		var key = { };
+		Reflect.setField(key, infos.primaryIndex.hash, haxeToDynamo(infos.primaryIndex.hash, Reflect.field(obj, infos.primaryIndex.hash)));
+		if (infos.primaryIndex.range != null) Reflect.setField(key, infos.primaryIndex.range, haxeToDynamo(infos.primaryIndex.range, Reflect.field(obj, infos.primaryIndex.range)));
+		
+		cnx.sendRequest("DeleteItem ", {
+			TableName: getTableName(),
+			Key: key
+		});
+	}
+	
+	public function objectToString (o:T):String {
+		return Std.string(o);
 	}
 	#end
 	

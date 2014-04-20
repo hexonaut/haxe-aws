@@ -15,4 +15,12 @@ class Object extends sys.db.Object {
 		if ( _manager == null ) untyped _manager = Type.getClass(this).manager;
 	}
 	
+	public function put ():Void {
+		untyped _manager.doPut(this);
+	}
+	
+	public override function lock ():Void {
+		throw "Lock does not apply for DynamoDB.";
+	}
+	
 }

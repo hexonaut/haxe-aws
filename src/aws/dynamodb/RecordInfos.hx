@@ -10,8 +10,8 @@ typedef RecordInfos = {
 };
 
 typedef RecordIndex = {
-	hash:{ name:String, type:RecordType },
-	?range:{ name:String, type:RecordType }
+	hash:String,
+	?range:String
 }
 
 enum RecordType {
@@ -19,5 +19,10 @@ enum RecordType {
 	DFloat;
 	DInt;
 	DBool;
+	DBinary;
 	DDate;
+	DDateTime;
+	DTimeStamp;
+	DEnum(e:Enum<Dynamic>);
+	DSet(type:RecordType);
 }
