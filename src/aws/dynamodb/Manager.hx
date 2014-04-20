@@ -14,6 +14,7 @@ class Manager<T:sys.db.Object> {
 	
 	#if !macro
 	public static var cnx:Connection;
+	public static var prefix:String;	//Global prefix
 	#end
 	
 	var cls:Class<T>;
@@ -135,6 +136,8 @@ class Manager<T:sys.db.Object> {
 		var str = "";
 		if (infos.prefix != null) {
 			str += infos.prefix;
+		} else if (prefix != null) {
+			str += prefix;
 		}
 		str += infos.table;
 		if (infos.shard != null) {

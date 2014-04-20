@@ -170,6 +170,15 @@ class RecordMacros {
 							case TPExpr(e): Context.error("Invalid type.", e.pos);
 						}, pos)});
 					default:
+						var type = Context.getType((p.pack.length > 0 ? p.pack.join(".") : "") + p.name);
+						if (type != null) {
+							switch (type) {
+								case TAbstract(t, _):
+									return complexTypeToRecordTypeExpr(Context.toComplexType(t.get().type), pos);
+								default:
+							}
+						}
+						
 						Context.error("Invalid type.", pos);
 					}
 				default:
