@@ -151,6 +151,40 @@ class RecordMacros {
 		}
 	}
 	
+	static function buildField( f : Field, fields : Array<Field> ) {
+		var ft = switch (f.kind) {
+			case FVar(t, _), FProp(_, _, t, _): t;
+			default: return;
+		}
+		var p = switch( ft ) {
+		case TPath(p): p;
+		default: return;
+		}
+		var pos = f.pos;
+		switch( p.name ) {
+		case "STimeStamp":
+			f.kind = FProp("dynamic", "dynamic", ft, null);
+			f.meta.push( { name : ":isVar", params : [], pos : f.pos } );
+			f.meta.push( { name : ":data", params : [], pos : f.pos } );
+			var meta = [ { name : ":hide", params : [], pos : pos } ];
+			var efield = { expr : EConst(CIdent(f.name)), pos : pos };
+			var get = {
+				args : [],
+				params : [],
+				ret : ft,
+				expr : macro return $efield == null ? null : Date.fromTime(cast $efield),
+			};
+			var set = {
+				args : [{ name : "_v", opt : false, type : ft, value : null }],
+				params : [],
+				ret : ft,
+				expr : macro { $efield = _v == null ? null : cast _v.getTime(); return _v; },
+			};
+			fields.push( { name : "get_" + f.name, pos : pos, meta : meta, access : [APrivate], doc : null, kind : FFun(get) } );
+			fields.push( { name : "set_" + f.name, pos : pos, meta : meta, access : [APrivate], doc : null, kind : FFun(set) } );
+		}
+	}
+	
 	public static function macroBuild ():Array<Field> {
 		var cls = Context.getLocalClass().get();
 		var fields = Context.getBuildFields();
@@ -182,6 +216,9 @@ class RecordMacros {
 				}
 				
 				if (type != null) cls.meta.add(":type_" + i.name, [type], p);
+				
+				//Build complex fields
+				buildField(i, fields);
 			}
 		}
 		

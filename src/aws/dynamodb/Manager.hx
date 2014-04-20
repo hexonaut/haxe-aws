@@ -62,7 +62,7 @@ class Manager<T:sys.db.Object> {
 				{t:"N", v:Std.string(date.getTime())};
 			case DDateTime: {t:"N", v:Std.string(cast(val, Date).getTime())};
 			case DTimeStamp:
-				var t = cast(val, Date).getTime();
+				var t = cast(val, Float);
 				//Add random precision if we need to
 				if (Math.ffloor(t) == t) t += Math.random() * 1000;
 				{t:"N", v:Std.string(t)};
@@ -98,7 +98,8 @@ class Manager<T:sys.db.Object> {
 			case DFloat: Std.parseFloat(val);
 			case DInt: Std.parseInt(val);
 			case DBool: val == "1";
-			case DDate, DDateTime, DTimeStamp: Date.fromTime(Std.parseFloat(val));
+			case DDate, DDateTime: Date.fromTime(Std.parseFloat(val));
+			case DTimeStamp: Std.parseFloat(val);
 			case DBinary: Base64.decode(val);
 			case DEnum(e): Std.parseInt(val);
 			case DSet(t):
