@@ -35,7 +35,7 @@ class Manager<T:sys.db.Object> {
 	}
 	
 	#if !macro
-	function getInfos ():RecordInfos {
+	public function getInfos ():RecordInfos {
 		return untyped cls.__dynamodb_infos;
 	}
 	
@@ -128,19 +128,17 @@ class Manager<T:sys.db.Object> {
 		return spod;
 	}
 	
-	function getTableName ():String {
+	function getTableName (?shardDate:Date):String {
 		var infos = getInfos();
+		if (shardDate == null) shardDate = Date.now();
+		
 		var str = "";
 		if (infos.prefix != null) {
 			str += infos.prefix;
 		}
 		str += infos.table;
 		if (infos.shard != null) {
-			//Fill in temporal sharding with UTC time
-			var now = Date.now();
-			now = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-			now = DateTools.delta(Date.now(), now.getTime() - 24. * 3600 * 1000 * Math.round(now.getTime() / 24 / 3600 / 1000));
-			str += DateTools.format(now, infos.shard);
+			str += DateTools.format(shardDate, infos.shard);
 		}
 		return str;
 	}
@@ -254,8 +252,115 @@ class Manager<T:sys.db.Object> {
 		});
 	}
 	
+	public function doSerialize( field : String, v : Dynamic ) : haxe.io.Bytes {
+		var s = new haxe.Serializer();
+		s.useEnumIndex = true;
+		s.serialize(v);
+		var str = s.toString();
+		#if neko
+		return neko.Lib.bytesReference(str);
+		#else
+		return haxe.io.Bytes.ofString(str);
+		#end
+	}
+
+	public function doUnserialize( field : String, b : haxe.io.Bytes ) : Dynamic {
+		if( b == null )
+			return null;
+		var str;
+		#if neko
+		str = neko.Lib.stringReference(b);
+		#else
+		str = b.toString();
+		#end
+		if( str == "" )
+			return null;
+		return haxe.Unserializer.run(str);
+	}
+	
 	public function objectToString (o:T):String {
 		return Std.string(o);
+	}
+	
+	public function createTable (?shardDate:Date):Void {
+		var infos = getInfos();
+		
+		var attrFields = new Array<String>();
+		
+		var key = new Array<Dynamic>();
+		key.push( { AttributeName:infos.primaryIndex.hash, KeyType:"HASH" } );
+		attrFields.push(infos.primaryIndex.hash);
+		if (infos.primaryIndex.range != null) {
+			key.push( { AttributeName:infos.primaryIndex.range, KeyType:"RANGE" } );
+			attrFields.push(infos.primaryIndex.range);
+		}
+		
+		var globalIndexes = new Array<Dynamic>();
+		var localIndexes = new Array<Dynamic>();
+		for (i in infos.indexes) {
+			var key = new Array<Dynamic>();
+			key.push( { AttributeName:i.index.hash, KeyType:"HASH" } );
+			if (i.index.range != null) key.push( { AttributeName:infos.primaryIndex.range, KeyType:"RANGE" } );
+			
+			if (i.global) {
+				globalIndexes.push( {
+					IndexName: i.name,
+					KeySchema: key,
+					Projection: { ProjectionType: "ALL" },
+					ProvisionedThroughput: {
+						ReadCapacityUnits: i.readCap != null ? i.readCap : 1,
+						WriteCapacityUnits: i.writeCap != null ? i.writeCap : 1
+					}
+				} );
+			} else {
+				localIndexes.push( {
+					IndexName: i.name,
+					KeySchema: key,
+					Projection: { ProjectionType: "ALL" }
+				} );
+			}
+		}
+		
+		var fields = new Array<Dynamic>();
+		for (i in infos.fields) {
+			if (attrFields.has(i.name)) {
+				var type = switch (i.type) {
+					case DString: "S";
+					case DBinary: "B";
+					case DSet(t):
+						switch (t) {
+							case DString: "SS";
+							case DBinary: "BS";
+							default: "NS";
+						}
+					default: "N";
+				};
+				
+				fields.push( {
+					AttributeName: i.name,
+					AttributeType: type
+				} );
+			}
+		}
+		
+		var req = {
+			TableName: getTableName(shardDate),
+			ProvisionedThroughput: {
+				ReadCapacityUnits: infos.readCap != null ? infos.readCap : 1,
+				WriteCapacityUnits: infos.writeCap != null ? infos.writeCap : 1
+			},
+			KeySchema: key,
+			AttributeDefinitions: fields
+		};
+		
+		if (globalIndexes.length > 0) Reflect.setField(req, "GlobalSecondaryIndexes", globalIndexes);
+		if (localIndexes.length > 0) Reflect.setField(req, "LocalSecondaryIndexes", localIndexes);
+		
+		cnx.sendRequest("CreateTable", req);
+	}
+	
+	public function deleteTable (?shardDate:Date):Void {
+		cnx.sendRequest("DeleteTable", { TableName:getTableName(shardDate) } );
 	}
 	#end
 	

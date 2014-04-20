@@ -20,10 +20,25 @@ class RecordMacros {
 					case CIdent(s), CString(s):
 						return s;
 					default:
-						throw "Expr should be identifier.";
+						throw "Expr should be identifier or string.";
 				}
 			default:
-				throw "Expr should be identifier.";
+				throw "Expr should be identifier or string.";
+		};
+	}
+	
+	static function exprToInt (expr:Expr):Int {
+		var p = Context.currentPos();
+		return switch (expr.expr) {
+			case EConst(c):
+				switch (c) {
+					case CInt(s):
+						return Std.parseInt(s);
+					default:
+						throw "Expr should be integer.";
+				}
+			default:
+				throw "Expr should be integer.";
 		};
 	}
 	
@@ -35,16 +50,27 @@ class RecordMacros {
 				case ":prefix": obj.prefix = exprToString(i.params[0]);
 				case ":table": obj.table = exprToString(i.params[0]);
 				case ":shard": obj.shard = exprToString(i.params[0]);
+				case ":read": obj.readCap = exprToInt(i.params[0]);
+				case ":write": obj.writeCap = exprToInt(i.params[0]);
 				case ":id":
 					var key:Dynamic = { };
 					key.hash = exprToString(i.params[0]);
 					if (i.params.length > 1) key.range = exprToString(i.params[1]);
 					obj.primaryIndex = key;
-				case ":index":
+				case ":lindex":
 					var key:Dynamic = { };
 					key.hash = exprToString(i.params[1]);
 					if (i.params.length > 2) key.range = exprToString(i.params[2]);
-					obj.indexes.push({name:exprToString(i.params[0]), index:key});
+					obj.indexes.push({name:exprToString(i.params[0]), index:key, global:false});
+				case ":gindex":
+					var key:Dynamic = { };
+					var readCap:Int = null;
+					var writeCap:Int = null;
+					key.hash = exprToString(i.params[1]);
+					if (i.params.length > 2) key.range = exprToString(i.params[2]);
+					if (i.params.length > 3) readCap = exprToInt(i.params[3]);
+					if (i.params.length > 4) writeCap = exprToInt(i.params[4]);
+					obj.indexes.push({name:exprToString(i.params[0]), index:key, global:true, readCap:readCap, writeCap:writeCap});
 				default:
 					if (i.name.startsWith(":type_")) {
 						var name = null;
@@ -190,7 +216,7 @@ class RecordMacros {
 		var fields = Context.getBuildFields();
 		var p = Context.currentPos();
 		
-		//Prevent sys.db.Object autobuild macro from building on this object
+		//Prevent sys.db.Object autobuild macro from building db infos
 		cls.meta.add(":skip", [], p);
 		
 		for (i in fields) {

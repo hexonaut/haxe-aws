@@ -5,8 +5,10 @@ typedef RecordInfos = {
 	table:String,
 	?shard:String,
 	primaryIndex:RecordIndex,
-	indexes:Array<{ name:String, index:RecordIndex }>,
-	fields:Array<{ name:String, type:RecordType }>
+	indexes:Array<{ name:String, index:RecordIndex, global:Bool, ?readCap:Int, ?writeCap:Int }>,
+	fields:Array<{ name:String, type:RecordType }>,
+	?readCap:Int,
+	?writeCap:Int
 };
 
 typedef RecordIndex = {

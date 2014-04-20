@@ -17,10 +17,49 @@ import aws.dynamodb.DynamoDBException;
 import haxe.crypto.Base64;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
+import haxe.io.Input;
+import haxe.io.Output;
 import haxe.Json;
+import sys.net.Host;
+
+private class PersistantSocket {
+	
+	public var input(default, null):Input;
+	public var output(default, null):Output;
+	public var s(default, null):Dynamic;
+	
+	public function new (s:Dynamic) {
+		this.s = s;
+		this.input = s.input;
+		this.output = s.output;
+	}
+	
+	public function connect (host:Host, port:Int):Void {
+		//Do nothing
+	}
+	
+	public function setTimeout (t:Float):Void {
+		s.setTimeout(t);
+	}
+	
+	public function write (str:String):Void {
+		s.write(str);
+	}
+	
+	public function close ():Void {
+		//Do nothing
+	}
+	
+	public function shutdown (read:Bool, write:Bool):Void {
+		//Do nothing
+	}
+	
+	
+}
 
 /**
  * Controls all database interaction.
+ * 
  * @author Sam MacPherson
  */
 
@@ -30,58 +69,35 @@ class Connection {
 	static inline var API_VERSION:String = "20120810";
 	
 	var config:DynamoDBConfig;
+	var sock:PersistantSocket;
 	
 	/**
 	 * Create a new DynamoDB connection.
 	 * 
-	 * @param	config	An IAM configuration file.
+	 * @param config An IAM configuration file.
 	 */
 	public function new (config:DynamoDBConfig) {
 		this.config = config;
 	}
 	
 	/**
-	 * Creates a table.
-	 * 
-	 * @param	table	The name of the table you want to create.
-	 * @param	key	The primary key definition for this table.
-	 * @param	readCapacity	The initial read capacity for this table.
-	 * @param	writeCapacity	The initial write capacity for this table.
-	 * @return	The details of this table.
+	 * Initiate the connection.
 	 */
-	public function createTable (table:String, ?readCapacity:Int = 1, ?writeCapacity:Int = 1):Void {
+	public function connect ():Void {
+		if (config.ssl) sock = new PersistantSocket(new sys.ssl.Socket());
+		else sock = new PersistantSocket(new sys.net.Socket());
 		
+		sock.s.connect(new Host(config.host), config.ssl ? 443 : 80);
 	}
 	
 	/**
-	 * Deletes a table.
-	 * 
-	 * @param	table	The name of the table you want to delete.
+	 * Close the connection.
 	 */
-	public function deleteTable (table:String):Void {
-		
-	}
-	
-	/**
-	 * Returns info about the given table.
-	 * 
-	 * @param	table	The table name.
-	 * @return	Information about the table.
-	 */
-	public function describeTable (table:String):Void {
-		
-	}
-	
-	/**
-	 * Updates a table's read/write capacity.
-	 * 
-	 * @param	table	The table's name.
-	 * @param	readCapacity	The new read capacity for the table.
-	 * @param	writeCapacity	The new write capacity for the table.
-	 * @return	Information about the table.
-	 */
-	public function updateTable (table:String, readCapacity:Int, writeCapacity:Int):Void {
-		
+	public function close ():Void {
+		try {
+			sock.s.close();
+		} catch (e:Dynamic) {
+		}
 	}
 	
 	function formatError (httpCode:Int, type:String, message:String):Void {
@@ -104,7 +120,9 @@ class Connection {
 		
 		conn.setHeader("content-type", "application/x-amz-json-1.0; charset=utf-8");
 		conn.setHeader("x-amz-target", SERVICE + "_" + API_VERSION + "." + operation);
+		conn.setHeader("Connection", "Keep-Alive");
 		conn.setPostData(Json.stringify(payload));
+		trace(Json.stringify(payload, null, "\t"));
 		
 		var err = null;
 		conn.onError = function (msg:String):Void {
@@ -113,10 +131,12 @@ class Connection {
 		
 		var data:BytesOutput = new BytesOutput();
 		conn.applySigning(true);
-		conn.customRequest(true, data);
+		conn.customRequest(true, data, sock);
 		var out:Dynamic;
 		try {
-			out = Json.parse(data.getBytes().toString());
+			var str = data.getBytes().toString();
+			trace(str);
+			out = Json.parse(str);
 		} catch (e:Dynamic) {
 			throw ConnectionInterrupted;
 		}
