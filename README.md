@@ -1,99 +1,125 @@
 haxe-aws
 ========
 
-A Haxe library for communicating with the Amazon AWS (http://www.amazonaws.com) backend. haxe-aws has only been tested on neko and cpp, but it is designed to be fully cross platform.
+A Haxe library for communicating with the Amazon AWS (http://www.amazonaws.com) backend. haxe-aws is cross-platform at its core, but the implementations are only designed for sys platforms.
 
 Implemented services:
 
 *	IAM Authentication (Signature V2 and V4)
-*	DynamoDB (Except batch read/write)
+*	DynamoDB
 *	Elastic MapReduce
 
-DynamoDB Examples
------------------
+DynamoDB
+========
 
-Using DynamoDB is fairly straight forward.
+Since v0.2.0 the DynamoDB implementation has been built to mirror the Haxe SPOD API. Here is an example object taken from the SPOD documentation page (http://haxe.org/manual/spod) reworked to DynamoDB:
 
-    var config = new com.amazonaws.dynamodb.DynamoDBConfig("dynamodb.us-east-1.amazonaws.com", "MYACCESSKEY", "MYSECRETKEY", "us-east-1");
-    var db = new com.amazonaws.dynamodb.DynamoDB(config);
-	
-	//Add 3 items to myTable
-	db.putItem("myTable", {id:0, rangeid:0 someVar:"Haxe Rocks!"});
-	db.putItem("myTable", {id:0, rangeid:1, someVar:"Haxe really Rocks!"});
-	db.putItem("myTable", {id:1, rangeid:0, someBinaryVar:haxe.io.Bytes.ofString("DynamoDB supports binary data too!")});
-	
-	//Print the second items 'someVar' attribute
-	trace(db.getItem("myTable", {id:0, rangeid:1}).someVar);	//Will print "Haxe really Rocks!"
-	
-	//Count the number of items in myTable
-	trace(Collection.scan(db, "myTable").count());		//Will print "3"
-	
-	//Scan myTable
-	for (i in Collection.scan(db, "myTable")) {
-		trace(i);
-	}
-	
-	//Query myTable for items with hash key 0
-	for (i in Collection.query(db, "myTable", 0)) {
-		trace(i);
-	}
-	
-	//Query myTable for items with hash key 0 but limit to the first result
-	for (i in Collection.query(db, "myTable", 0, {limit:1})) {
-		trace(i);
-	}
+	import aws.dynamodb.Manager;
+	import aws.dynamodb.Object;
+	import aws.dynamodb.Types;
 
-You can also extend PersistantObject on your custom object to simplify usage. Below is an example of storing a Customer object with DynamoDB:
-
-	@table("customer")	//Required
-	@hash("id")			//Required
-	@range("range")		//Required if the table is using a range
-	class Customer extends com.amazonaws.dynamodb.PersistantObject {
+	@:table("user")
+	@:id(id)
+	class User extends Object {
 		
-		public var id:Int;
-		public var range:String;
-		public var theTime:Date;
-		@ignore public var extraData:String;	//This will not be inserted into the database
+		public var id:SInt;
+		public var name:SString;
+		public var birthday:SDate;
+		public var phoneNumber:SString;
 		
+		public static var manager = new UserManager();
+
 		public function new () {
 			super();
 		}
 		
 	}
-	
-	var config = new com.amazonaws.dynamodb.DynamoDBConfig("dynamodb.us-east-1.amazonaws.com", "MYACCESSKEY", "MYSECRETKEY", "us-east-1");
-    var db = new com.amazonaws.dynamodb.DynamoDB(config);
-	
-	PersistantObject.DATABASE = db;
-	PersistantObject.TABLE_PREFIX = "table_prefix_";
-	
-	//Insert a new object into the database
-	var c = new Customer();
-	c.id = 0;				//Required
-	c.range = "testing";	//Required
-	c.theTime = Date.now();
-	c.extraData = "this string not be inserted into the database";
-	c.insert();
-	
-	//Get some object
-	var c2 = new Customer();
-	c2.id = 0;
-	c2.range = "testing";
-	c2.get();
-	trace(c2.theTime);		//Returns the current time
-	trace(c2.extraData);	//Returns null
-	
-	//Update an attribute
-	c2.theTime = Date.now();
-	c2.update();
-	
-	//Delete the object
-	c2.delete();
-	
-Supported types are Bool, Int, Float, String, Date and Bytes.
 
-Elastic MapReduce Examples
---------------------------
+	class UserManager extends Manager<User> {
+		
+		public function new () {
+			super(User);
+		}
+		
+	}
+
+As you can see there are very few differences. If you are familiar with Haxe SPOD then you will adjust quickly to using DynamoDB SPOD. I'll go over some of the differences.
+
+Types
+-----
+
+Types are not as specific in DynamoDB SPOD. For example Haxe SPOD has SSmallText, SMediumText, SString<Const>, etc whereas DynamoDB SPOD just has SString. All of the types that use the same name in both directly translate over.
+
+Some types that are special to DynamoDB:
+
+ * SSet<T> - Stores a list of items. Maps directly to the "Set" DynamoDB type.
+ * STimeStamp - It is often useful to produce a unique timestamp in DynamoDB for temporally ordered, but unique entries. STimeStamp does just that by filling the DateTime to maximum precision with random digits. This way you can query entries in temporal order (within a second accuracy) while still maintaining required uniqueness.
+
+Meta Data
+---------
+
+ * @:prefix("TABLE_PREFIX") - All tables in DynamoDB share the same namespace so it is often nice to prefix them to emulate a seperate Database. Alternatively you can set the aws.dynamodb.Manager.prefix to set the prefix globally.
+ * @:table("TABLE_NAME") - The name of the table. Required.
+ * @:shard("_%Y-%m-%d") - Often you want to rotate tables on a regular basis to minimize DynamoDB storage costs. The shard meta data will be appended to the table name after being sent through the DateTools.format() function performed on the current time.
+ * @:id(hash, range) - Specify the primary index of the table. The range identifier is optional. The id meta data is required.
+ * @:read(readCapacity) - Specify the read capacity of this table. Defaults to 1 if not specified.
+ * @:write(writeCapacity) - Specify the write capacity of this table. Defaults to 1 if not specified.
+ * @:lindex("IndexName", hash, secondary_range) - Specify a local secondary index. Range is optional.
+ * @:gindex("IndexName", secondary_hash, secondary_range, readCapacity, writeCapacity) - Specify a global secondary index. Range read and write capacity are optional.
+
+Search
+------
+
+	import aws.dynamodb.Manager;
+	import aws.dynamodb.Object;
+	import aws.dynamodb.Types;
+
+	@:table("post")
+	@:id(thread, postdate)
+	@:gindex("UserIndex", poster, postdate)
+	class Post extends Object {
+		
+		public var thread:SString;
+		public var poster:SString;
+		public var message:SString;
+		public var postdate:STimeStamp;
+		
+		public static var manager = new PostManager();
+
+		public function new () {
+			super();
+		}
+		
+	}
+
+	class PostManager extends Manager<Post> {
+		
+		public function new () {
+			super(Post);
+		}
+		
+	}
+	
+	//List posts in this thread
+	for (i in Post.manager.search($thread == "A Forum Thread", { orderBy:postdate, limit:10 })) {
+		trace(i.message);
+	}
+	
+	//List most recent posts by this user that occurred on or before Jan 1st, 2014
+	for (i in Post.manager.search($poster == "User123" && $postdate <= new Date(2014, 0, 1, 0, 0, 0), { orderBy:-postdate, limit:10 })) {
+		trace(i.message);
+	}
+
+Search is built to look as close to regular Haxe SPOD search as possible. The only difference is the flexibility of the queries. DynamoDB only allows queries on a hash key followed by simple comparisons to the range key. Really all your queries should be structured like this:
+
+	$hash == "Some Hash" && $range OP OPERAND
+
+NOTE: The orderBy clause must always be the range key of the comparison.
+
+NOTE: The index of the search will be automatically inferred based on the arguments of the search/select conditional.
+
+Elastic MapReduce
+=================
 
 Here is how you run a custom script with Amazon EMR:
 
