@@ -118,6 +118,10 @@ NOTE: The orderBy clause must always be the range key of the comparison.
 
 NOTE: The index of the search will be automatically inferred based on the arguments of the search/select conditional.
 
+Allowed Range Operators:
+
+==, >, >=, <, <=
+
 Elastic MapReduce
 =================
 
