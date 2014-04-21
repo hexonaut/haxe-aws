@@ -7,6 +7,7 @@ typedef RecordInfos = {
 	primaryIndex:RecordIndex,
 	indexes:Array<{ name:String, index:RecordIndex, global:Bool, ?readCap:Int, ?writeCap:Int }>,
 	fields:Array<{ name:String, type:RecordType }>,
+	relations:Array<RecordRelation>,
 	?readCap:Int,
 	?writeCap:Int
 };
@@ -14,6 +15,11 @@ typedef RecordInfos = {
 typedef RecordIndex = {
 	hash:String,
 	?range:String
+}
+
+typedef RecordRelation = {
+	prop:String,
+	key:String
 }
 
 enum RecordType {

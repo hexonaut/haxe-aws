@@ -43,7 +43,7 @@ class RecordMacros {
 	}
 	
 	static function metaToInfos (meta:MetaAccess):RecordInfos {
-		var obj:RecordInfos = { table:null, primaryIndex:null, indexes:[], fields:[] };
+		var obj:RecordInfos = { table:null, primaryIndex:null, indexes:[], fields:[], relations:[] };
 		
 		for (i in meta.get()) {
 			switch (i.name) {
@@ -103,6 +103,8 @@ class RecordMacros {
 						}
 						
 						obj.fields.push({ name:i.name.substr(":type_".length), type:std.Type.createEnum(RecordType, name, params) });
+					} else if (i.name.startsWith(":relation_")) {
+						obj.relations.push( { prop:i.name.substr(":relation_".length), key:exprToString(i.params[0]) } );
 					}
 			}
 		}
@@ -258,11 +260,63 @@ class RecordMacros {
 						}
 					default:
 				}
+			} else if (i.meta.exists(function (e) { return e.name == ":relation"; } )) {
+				for (o in i.meta) {
+					if (o.name == ":relation") {
+						cls.meta.add(":relation_" + i.name, o.params, o.pos);
+						
+						switch( i.kind ) {
+							case FVar(t, _), FProp(_, _, t, _):
+								i.kind = FProp("dynamic", "dynamic", t);
+								var relKey = exprToString(o.params[0]);
+								var ttype = t, tname;
+								var pos = i.pos;
+								i.meta.push( { name : ":isVar", params : [], pos : pos } );
+								while( true )
+									switch(ttype) {
+									case TPath(t):
+										if( t.params.length == 1 && (t.name == "Null" || t.name == "SNull") ) {
+											ttype = switch( t.params[0] ) {
+											case TPType(t): t;
+											default: throw "assert";
+											};
+											continue;
+										}
+										var p = t.pack.copy();
+										p.push(t.name);
+										if( t.sub != null ) p.push(t.sub);
+										tname = p.join(".");
+										break;
+									default:
+										Context.error("Relation type should be a type path", pos);
+									}
+								var get = {
+									args : [],
+									params : [],
+									ret : t,
+									expr : Context.parse('{ var v = Reflect.field(this, "${i.name}"); if (v != null) return v.value; var y = $tname.manager.unsafeGet(Reflect.field(this, "$relKey")); Reflect.setField(this, "${i.name}", { value : y }); return y; }', pos),
+								};
+								var set = {
+									args : [{ name : "_v", opt : false, type : t, value : null }],
+									params : [],
+									ret : t,
+									expr : Context.parse('{ Reflect.setField(this, "${i.name}", { value : _v }); if( _v == null ) Reflect.setField(this, "$relKey", null); else Reflect.setField(this, "$relKey", Reflect.field(_v, untyped $tname.manager.table_keys[0])); return _v; }', pos),
+								};
+								var meta = [{ name : ":hide", params : [], pos : pos }];
+								fields.push({ name : "get_"+i.name, pos : pos, meta : meta, access : [APrivate], doc : null, kind : FFun(get) });
+								fields.push({ name : "set_"+i.name, pos : pos, meta : meta, access : [APrivate], doc : null, kind : FFun(set) });
+							default:
+								Context.error("Invalid relation field type", i.pos);
+							}
+						
+						break;
+					}
+				}
 			} else {
 				var type = null;
 				
 				switch (i.kind) {
-					case FVar(t, _), FProp(_, _, t, _) if (!i.meta.exists(function (e) { return e.name == ":skip" || e.name == ":relation"; } )):
+					case FVar(t, _), FProp(_, _, t, _) if (!i.meta.exists(function (e) { return e.name == ":skip"; } )):
 						type = complexTypeToRecordTypeExpr(t, i.pos);
 					default:
 				}
@@ -275,7 +329,7 @@ class RecordMacros {
 		}
 		
 		var infos = metaToInfos(cls.meta);
-		fields.push( { name:"__dynamodb_infos", meta:[], access:[AStatic], pos:p, kind:FVar(null, 
+		fields.unshift( { name:"__dynamodb_infos", meta:[], access:[AStatic], pos:p, kind:FVar(null, 
 			fillTypes(cls.meta, Context.makeExpr(infos, p))
 		) });
 		

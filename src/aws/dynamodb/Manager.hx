@@ -18,9 +18,17 @@ class Manager<T:sys.db.Object> {
 	#end
 	
 	var cls:Class<T>;
+	var table_infos:RecordInfos;
+	var table_keys:Array<String>;
 
 	public function new (cls:Class<T>) {
 		this.cls = cls;
+		#if !macro
+		this.table_infos = getInfos();
+		this.table_keys = new Array<String>();
+		table_keys.push(table_infos.primaryIndex.hash);
+		if (table_infos.primaryIndex.range != null) table_keys.push(table_infos.primaryIndex.range);
+		#end
 	}
 	
 	public macro function get (ethis, id, ?consistent:haxe.macro.Expr.ExprOf<Bool>): #if macro haxe.macro.Expr #else haxe.macro.Expr.ExprOf<T> #end {
@@ -281,8 +289,48 @@ class Manager<T:sys.db.Object> {
 		return haxe.Unserializer.run(str);
 	}
 	
-	public function objectToString (o:T):String {
-		return Std.string(o);
+	function objectToString( it : T ) : String {
+		var table_name = getTableName();
+		var s = new StringBuf();
+		s.add(table_name);
+		if( table_keys.length == 1 ) {
+			s.add("#");
+			s.add(Reflect.field(it,table_keys[0]));
+		} else {
+			s.add("(");
+			var first = true;
+			for( f in table_keys ) {
+				if( first )
+					first = false;
+				else
+					s.add(",");
+				s.add(f);
+				s.add(":");
+				s.add(Reflect.field(it,f));
+			}
+			s.add(")");
+		}
+		return s.toString();
+	}
+	
+	function makeCacheKey( x : T ) : String {
+		var table_name = getTableName();
+		if( table_keys.length == 1 ) {
+			var k = Reflect.field(x,table_keys[0]);
+			if( k == null )
+				throw("Missing key "+table_keys[0]);
+			return Std.string(k)+table_name;
+		}
+		var s = new StringBuf();
+		for( k in table_keys ) {
+			var v = Reflect.field(x,k);
+			if( k == null )
+				throw("Missing key "+k);
+			s.add(v);
+			s.add("#");
+		}
+		s.add(table_name);
+		return s.toString();
 	}
 	
 	public function createTable (?shardDate:Date):Void {
