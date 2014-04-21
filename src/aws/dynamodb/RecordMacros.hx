@@ -67,9 +67,26 @@ class RecordMacros {
 					var readCap:Int = null;
 					var writeCap:Int = null;
 					key.hash = exprToString(i.params[1]);
-					if (i.params.length > 2) key.range = exprToString(i.params[2]);
-					if (i.params.length > 3) readCap = exprToInt(i.params[3]);
-					if (i.params.length > 4) writeCap = exprToInt(i.params[4]);
+					if (i.params.length > 2) {
+						switch (i.params[2].expr) {
+							case EConst(c):
+								switch (c) {
+									case CIdent(s):
+										key.range = s;
+									case CInt(s):
+										readCap = Std.parseInt(s);
+									default:
+								}
+							default:
+						}
+					}
+					if (i.params.length > 3) {
+						if (readCap != null) writeCap = exprToInt(i.params[3]);
+						else readCap = exprToInt(i.params[3]);
+					}
+					if (i.params.length > 4) {
+						writeCap = exprToInt(i.params[4]);
+					}
 					obj.indexes.push({name:exprToString(i.params[0]), index:key, global:true, readCap:readCap, writeCap:writeCap});
 				default:
 					if (i.name.startsWith(":type_")) {
