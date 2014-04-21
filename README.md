@@ -122,6 +122,11 @@ Allowed Range Operators:
 
 ==, >, >=, <, <=
 
+Relations
+---------
+
+DynamoDB SPOD is built to fully interoperate with Haxe SPOD. Relations can be made between objects residing on different databases using the usual Haxe SPOD syntax.
+
 Elastic MapReduce
 =================
 
