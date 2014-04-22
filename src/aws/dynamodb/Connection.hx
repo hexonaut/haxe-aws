@@ -70,6 +70,7 @@ class Connection {
 	
 	var config:DynamoDBConfig;
 	var sock:PersistantSocket;
+	var connected:Bool;
 	
 	/**
 	 * Create a new DynamoDB connection.
@@ -78,12 +79,14 @@ class Connection {
 	 */
 	public function new (config:DynamoDBConfig) {
 		this.config = config;
+		connected = false;
 	}
 	
 	/**
 	 * Initiate the connection.
 	 */
 	public function connect ():Void {
+		connected = true;
 		if (config.ssl) sock = new PersistantSocket(new sys.ssl.Socket());
 		else sock = new PersistantSocket(new sys.net.Socket());
 		
@@ -94,10 +97,7 @@ class Connection {
 	 * Close the connection.
 	 */
 	public function close ():Void {
-		try {
-			sock.s.close();
-		} catch (e:Dynamic) {
-		}
+		sock.s.close();
 	}
 	
 	function formatError (httpCode:Int, type:String, message:String):Void {
@@ -116,6 +116,8 @@ class Connection {
 	}
 	
 	public function sendRequest (operation:String, payload:Dynamic):Dynamic {
+		if (!connected) connect();
+		
 		var conn = new Sig4Http((config.ssl ? "https" : "http") + "://" + config.host + "/", config);
 		
 		conn.setHeader("content-type", "application/x-amz-json-1.0; charset=utf-8");
