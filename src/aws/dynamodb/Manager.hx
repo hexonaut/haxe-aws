@@ -363,6 +363,11 @@ class Manager<T:sys.db.Object> {
 						WriteCapacityUnits: i.writeCap != null ? i.writeCap : 1
 					}
 				} );
+				
+				if (!attrFields.has(i.index.hash)) attrFields.push(i.index.hash);
+				if (i.index.range != null) {
+					if (!attrFields.has(i.index.range)) attrFields.push(i.index.range);
+				}
 			} else {
 				localIndexes.push( {
 					IndexName: i.name,
