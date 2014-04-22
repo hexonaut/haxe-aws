@@ -173,9 +173,22 @@ class Manager<T:sys.db.Object> {
 		}).Item);
 	}
 	
+	/**
+	 * Clean up any null values. DynamoDB doesn't like these.
+	 */
+	function cleanup (obj:Dynamic):Void {
+		for (i in Reflect.fields(obj)) {
+			var v = Reflect.field(obj, i);
+			if (v == null) {
+				Reflect.deleteField(obj, i);
+			}
+		}
+	}
+	
 	public function unsafeObjects (query:Dynamic, ?consistent:Bool = false):List<T> {
 		Reflect.setField(query, "TableName", getTableName());
 		Reflect.setField(query, "ConsistentRead", consistent);
+		cleanup(query);
 		return Lambda.map(cast(cnx.sendRequest("Query", query).Items, Array<Dynamic>), function (e) { return buildSpodObject(e); } );
 	}
 	
