@@ -35,6 +35,15 @@ private class PersistantSocket {
 		this.output = s.output;
 	}
 	
+	public function actualConnect (host:Host, port:Int):Void {
+		s.connect(host, port);
+	}
+	
+	public function actualClose ():Void {
+		s.close();
+		s = null;
+	}
+	
 	public function connect (host:Host, port:Int):Void {
 		//Do nothing
 	}
@@ -91,14 +100,14 @@ class Connection {
 		if (config.ssl) sock = new PersistantSocket(new sys.ssl.Socket());
 		else sock = new PersistantSocket(new sys.net.Socket());
 		
-		sock.s.connect(new Host(config.host), config.ssl ? 443 : 80);
+		sock.actualConnect(new Host(config.host), config.ssl ? 443 : 80);
 	}
 	
 	/**
 	 * Close the connection.
 	 */
 	public function close ():Void {
-		sock.s.close();
+		sock.actualClose();
 	}
 	
 	function formatError (httpCode:Int, type:String, message:String):Void {
