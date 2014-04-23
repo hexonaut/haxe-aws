@@ -395,7 +395,7 @@ class RecordMacros {
 		var rangeKey = null;
 		
 		if ( eopt != null && !std.Type.enumEq(eopt.expr, EConst(CIdent("null"))) ) {
-			var opt = buildOptions(eopt, infos);
+			var opt = buildOptions(em, eopt, infos);
 			if (opt.orderBy != null) {
 				rangeKey = exprToString(opt.orderBy.field);
 				query.push({field:"ScanIndexForward", expr:opt.orderBy.asc});
@@ -416,7 +416,7 @@ class RecordMacros {
 		return { expr:EObjectDecl(query), pos:p };
 	}
 	
-	static function buildOptions( eopt : Expr, infos:RecordInfos ) {
+	static function buildOptions(em, eopt : Expr, infos:RecordInfos ) {
 		var p = eopt.pos;
 		var opt = { limit : null, orderBy : null };
 		switch( eopt.expr ) {
@@ -432,7 +432,7 @@ class RecordMacros {
 			for( o in fields ) {
 				switch( o.field ) {
 				case "limit":
-					opt.limit = buildLimit(o.expr, opt.orderBy, infos, o.expr.pos);
+					opt.limit = buildLimit(em, o.expr, opt.orderBy, infos, o.expr.pos);
 				default:
 				}
 			}
@@ -442,14 +442,15 @@ class RecordMacros {
 		return opt;
 	}
 	
-	static function buildLimit (limit:Expr, orderBy:{ field:Expr, asc:Expr }, infos:RecordInfos, p):{ ?pos:Expr, len:Expr } {
+	static function buildLimit (em, limit:Expr, orderBy:{ field:Expr, asc:Expr }, infos:RecordInfos, p):{ ?pos:Expr, len:Expr } {
 		switch (limit.expr) {
 			case EConst(c):
 				return { len:limit };
 			case EArrayDecl(a):
 				checkType(Context.typeof(a[0]), orderBy.field != null ? exprToString(orderBy.field) : infos.primaryIndex.range, infos, p);
 				
-				return { pos:a[0], len:a[1] };
+				var name = exprToString(orderBy.field);
+				return { pos:{ expr:EObjectDecl([{field:name, expr:macro $em.haxeToDynamo(${Context.makeExpr(name, p)}, ${a[0]})}]), pos:p }, len:a[1] };
 			default:
 				Context.error("Bad limit.", p);
 		}

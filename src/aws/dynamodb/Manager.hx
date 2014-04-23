@@ -60,7 +60,7 @@ class Manager<T:sys.db.Object> {
 		return null;
 	}
 	
-	function encodeVal (val:Dynamic, type:RecordType):{t:String, v:Dynamic} {
+	function encodeVal (val:Dynamic, type:RecordType): { t:String, v:Dynamic } {
 		return switch (type) {
 			case DString: {t:"S", v:val};
 			case DFloat, DInt: {t:"N", v:Std.string(val)};
@@ -70,9 +70,11 @@ class Manager<T:sys.db.Object> {
 				date = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
 				{t:"N", v:Std.string(date.getTime())};
 			case DDateTime: {t:"N", v:Std.string(cast(val, Date).getTime())};
-			case DTimeStamp: {t:"N", v:Std.string(val)};
+			case DTimeStamp if (Std.is(val, Float)): { t:"N", v:Std.string(val) };
+			case DTimeStamp: { t:"N", v:Std.string(cast(val, Date).getTime()) };
 			case DBinary: {t:"B", v:Base64.encode(val)};
-			case DEnum(e): { t:"N", v:Std.string(val) };
+			case DEnum(e) if (Std.is(val, Int)): { t:"N", v:Std.string(val) };
+			case DEnum(e): { t:"N", v:Std.string(Type.enumIndex(val)) };
 			case DSet(t):
 				var dtype = switch (t) {
 					case DString: "SS";
@@ -89,6 +91,8 @@ class Manager<T:sys.db.Object> {
 	}
 	
 	public function haxeToDynamo (name:String, v:Dynamic):Dynamic {
+		if (v == null) return null;
+		
 		var obj:Dynamic = { };
 		var ev = encodeVal(v, getFieldType(name));
 		
@@ -173,22 +177,17 @@ class Manager<T:sys.db.Object> {
 		}).Item);
 	}
 	
-	/**
-	 * Clean up any null values. DynamoDB doesn't like these.
-	 */
-	function cleanup (obj:Dynamic):Void {
-		for (i in Reflect.fields(obj)) {
-			var v = Reflect.field(obj, i);
-			if (v == null) {
-				Reflect.deleteField(obj, i);
+	public function unsafeObjects (query:Dynamic, ?consistent:Bool = false):List<T> {
+		//Check if start key is null
+		var startKey = Reflect.field(query, "ExclusiveStartKey");
+		if (startKey != null) {
+			if (Reflect.field(startKey, Reflect.fields(startKey)[0]) == null) {
+				Reflect.deleteField(query, "ExclusiveStartKey");
 			}
 		}
-	}
-	
-	public function unsafeObjects (query:Dynamic, ?consistent:Bool = false):List<T> {
+		
 		Reflect.setField(query, "TableName", getTableName());
 		Reflect.setField(query, "ConsistentRead", consistent);
-		cleanup(query);
 		return Lambda.map(cast(cnx.sendRequest("Query", query).Items, Array<Dynamic>), function (e) { return buildSpodObject(e); } );
 	}
 	

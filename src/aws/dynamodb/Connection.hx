@@ -21,6 +21,7 @@ import haxe.io.Input;
 import haxe.io.Output;
 import haxe.Json;
 import sys.net.Host;
+import www.util.Logger;
 
 private class PersistantSocket {
 	
