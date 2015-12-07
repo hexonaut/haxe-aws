@@ -108,7 +108,7 @@ class ElasticMapReduce {
 		}
 	}
 
-	public function runJobFlow (name:String, steps:Array<Step>, master:InstanceGroup, ?core:InstanceGroup, ?task:InstanceGroup, ?logPath:String):Void {
+	public function runJobFlow (name:String, steps:Array<Step>, master:InstanceGroup, ?core:InstanceGroup, ?task:InstanceGroup, ?logPath:String, ?extraParams:Map<String, String>):Void {
 		var params = new Map<String, String>();
 		params.set("Name", name);
 		if (logPath != null) params.set("LogUri", "s3n://" + logPath);
@@ -151,6 +151,12 @@ class ElasticMapReduce {
 			if (i.actionOnFailure != null) params.set("Steps.member." + index + ".ActionOnFailure", mapActionOnFailure(i.actionOnFailure));
 			
 			index++;
+		}
+		
+		if (extraParams != null) {
+			for (i in extraParams.keys()) {
+				params.set(i, extraParams.get(i));
+			}
 		}
 		
 		sendRequest(ACTION_RUN_JOB_FLOW, params);
