@@ -20,8 +20,8 @@ import haxe.io.BytesOutput;
 import haxe.io.Input;
 import haxe.io.Output;
 import haxe.Json;
-import sys.net.Host;
 
+#if !js
 private class PersistantSocket {
 	
 	public var input(default, null):Input;
@@ -34,7 +34,7 @@ private class PersistantSocket {
 		this.output = s.output;
 	}
 	
-	public function actualConnect (host:Host, port:Int):Void {
+	public function actualConnect (host:sys.net.Host, port:Int):Void {
 		s.connect(host, port);
 	}
 	
@@ -43,7 +43,7 @@ private class PersistantSocket {
 		s = null;
 	}
 	
-	public function connect (host:Host, port:Int):Void {
+	public function connect (host:sys.net.Host, port:Int):Void {
 		//Do nothing
 	}
 	
@@ -63,8 +63,8 @@ private class PersistantSocket {
 		//Do nothing
 	}
 	
-	
 }
+#end
 
 /**
  * Controls all database interaction.
@@ -78,7 +78,7 @@ class Connection {
 	static inline var API_VERSION:String = "20120810";
 	
 	var config:DynamoDBConfig;
-	var sock:PersistantSocket;
+	#if !js var sock:PersistantSocket; #end
 	var connected:Bool;
 	
 	/**
@@ -96,17 +96,22 @@ class Connection {
 	 */
 	public function connect ():Void {
 		connected = true;
+		#if !js
 		if (config.ssl) sock = new PersistantSocket(new sys.ssl.Socket());
 		else sock = new PersistantSocket(new sys.net.Socket());
 		
-		sock.actualConnect(new Host(config.host), config.ssl ? 443 : 80);
+		sock.actualConnect(new sys.net.Host(config.host), config.ssl ? 443 : 80);
+		#end
 	}
 	
 	/**
 	 * Close the connection.
 	 */
 	public function close ():Void {
+		connected = false;
+		#if !js
 		sock.actualClose();
+		#end
 	}
 	
 	function formatError (httpCode:Int, type:String, message:String):Void {
@@ -124,7 +129,7 @@ class Connection {
 		throw "Error: " + type + "\nMessage: " + message;
 	}
 	
-	public function sendRequest (operation:String, payload:Dynamic):Dynamic {
+	public function sendRequest (operation:String, payload:Dynamic): #if js promhx.Promise<Dynamic> #else Dynamic #end {
 		if (!connected) connect();
 		
 		var conn = new Sig4Http((config.ssl ? "https" : "http") + "://" + config.host + "/", config);
@@ -134,6 +139,28 @@ class Connection {
 		conn.setHeader("Connection", "Keep-Alive");
 		conn.setPostData(Json.stringify(payload));
 		
+		#if js
+		var d = new promhx.Deferred<Dynamic>();
+		var p = d.promise();
+		conn.onData = function (_data:String) {
+			d.resolve(Json.parse(_data));
+		};
+		conn.onError = function (err:String) {
+			try {
+				var out = Json.parse(conn.responseData);
+				try {
+					formatError(Std.parseInt(err.substr(err.indexOf("#") + 1)), out.__type, out.message);
+				} catch (e:Dynamic) {
+					p.reject(e);
+				}
+			} catch (e:Dynamic) {
+				p.reject(ConnectionInterrupted);
+			}
+		};
+		conn.applySigning(true);
+		conn.request(true);
+		return p;
+		#else
 		var err = null;
 		conn.onError = function (msg:String):Void {
 			err = msg;
@@ -150,6 +177,7 @@ class Connection {
 		}
 		if (err != null) formatError(Std.parseInt(err.substr(err.indexOf("#") + 1)), out.__type, out.message);
 		return out;
+		#end
 	}
 	
 }
