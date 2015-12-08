@@ -139,3 +139,8 @@ Here is how you run a custom script with Amazon EMR:
 		[{name:"Step1", jar:"s3://elasticmapreduce/libs/script-runner/script-runner.jar", args:["s3://mybucket/path/to/script"]}],
 		{ type:M1_SMALL }
 	);
+
+Notes
+=====
+
+JavaScript support is available with the https://github.com/jdonaldson/promhx library.

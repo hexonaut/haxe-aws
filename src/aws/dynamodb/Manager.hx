@@ -7,7 +7,7 @@ import haxe.crypto.Base64;
 
 using Lambda;
 
-class Manager<T:sys.db.Object> {
+class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 	
 	static inline var SERVICE:String = "DynamoDB";
 	static inline var API_VERSION:String = "20120810";
@@ -158,26 +158,36 @@ class Manager<T:sys.db.Object> {
 		return str;
 	}
 	
-	public function unsafeGet (id:Dynamic, ?consistent:Bool = false):T {
+	public function unsafeGet (id:Dynamic, ?consistent:Bool = false): #if js promhx.Promise<T> #else T #end {
 		var infos = getInfos();
 		var keys:Dynamic = { };
 		Reflect.setField(keys, infos.primaryIndex.hash, id);
 		return unsafeGetWithKeys(keys, consistent);
 	}
 	
-	public function unsafeGetWithKeys (keys:Dynamic, ?consistent:Bool = false):T {
+	public function unsafeGetWithKeys (keys:Dynamic, ?consistent:Bool = false): #if js promhx.Promise<T> #else T #end {
 		var dynkeys:Dynamic = { };
 		for (i in Reflect.fields(keys)) {
 			Reflect.setField(dynkeys, i, haxeToDynamo(i, Reflect.field(keys, i)));
 		}
+		#if js
+		return cnx.sendRequest("GetItem", {
+			TableName: getTableName(),
+			ConsistentRead: consistent,
+			Key: dynkeys
+		}).then(function (result:Dynamic) {
+			return buildSpodObject(result.Item);
+		});
+		#else
 		return buildSpodObject(cnx.sendRequest("GetItem", {
 			TableName: getTableName(),
 			ConsistentRead: consistent,
 			Key: dynkeys
 		}).Item);
+		#end
 	}
 	
-	public function unsafeObjects (query:Dynamic, ?consistent:Bool = false):List<T> {
+	public function unsafeObjects (query:Dynamic, ?consistent:Bool = false): #if js promhx.Promise<List<T>> #else List<T> #end {
 		//Check if start key is null
 		var startKey = Reflect.field(query, "ExclusiveStartKey");
 		if (startKey != null) {
@@ -188,7 +198,13 @@ class Manager<T:sys.db.Object> {
 		
 		Reflect.setField(query, "TableName", getTableName());
 		Reflect.setField(query, "ConsistentRead", consistent);
+		#if js
+		return cnx.sendRequest("Query", query).then(function (result) {
+			return Lambda.map(cast(result.Items, Array<Dynamic>), function (e) { return buildSpodObject(e); } );
+		});
+		#else
 		return Lambda.map(cast(cnx.sendRequest("Query", query).Items, Array<Dynamic>), function (e) { return buildSpodObject(e); } );
+		#end
 	}
 	
 	function checkKeyExists (spod:T, index:RecordIndex):Void {
@@ -229,39 +245,54 @@ class Manager<T:sys.db.Object> {
 		return fields;
 	}
 	
-	public function doInsert (obj:T):Void {
+	public function doInsert (obj:T): #if js promhx.Promise<T> #else Void #end {
 		var infos = getInfos();
 		checkKeyExists(obj, infos.primaryIndex);
 		
-		cnx.sendRequest("PutItem ", {
+		var result = cnx.sendRequest("PutItem ", {
 			TableName: getTableName(),
 			Expected: buildRecordExpected(obj, infos.primaryIndex, false),
 			Item: buildFields(obj)
 		});
+		#if js
+		return result.then(function (_) {
+			return obj;
+		});
+		#end
 	}
 	
-	public function doUpdate (obj:T):Void {
+	public function doUpdate (obj:T): #if js promhx.Promise<T> #else Void #end {
 		var infos = getInfos();
 		checkKeyExists(obj, infos.primaryIndex);
 		
-		cnx.sendRequest("PutItem ", {
+		var result = cnx.sendRequest("PutItem ", {
 			TableName: getTableName(),
 			Expected: buildRecordExpected(obj, infos.primaryIndex, true),
 			Item: buildFields(obj)
 		});
+		#if js
+		return result.then(function (_) {
+			return obj;
+		});
+		#end
 	}
 	
-	public function doPut (obj:T):Void {
+	public function doPut (obj:T): #if js promhx.Promise<T> #else Void #end {
 		var infos = getInfos();
 		checkKeyExists(obj, infos.primaryIndex);
 		
-		cnx.sendRequest("PutItem ", {
+		var result = cnx.sendRequest("PutItem ", {
 			TableName: getTableName(),
 			Item: buildFields(obj)
 		});
+		#if js
+		return result.then(function (_) {
+			return obj;
+		});
+		#end
 	}
 	
-	public function doDelete (obj:T):Void {
+	public function doDelete (obj:T): #if js promhx.Promise<T> #else Void #end {
 		var infos = getInfos();
 		checkKeyExists(obj, infos.primaryIndex);
 		
@@ -269,10 +300,15 @@ class Manager<T:sys.db.Object> {
 		Reflect.setField(key, infos.primaryIndex.hash, haxeToDynamo(infos.primaryIndex.hash, Reflect.field(obj, infos.primaryIndex.hash)));
 		if (infos.primaryIndex.range != null) Reflect.setField(key, infos.primaryIndex.range, haxeToDynamo(infos.primaryIndex.range, Reflect.field(obj, infos.primaryIndex.range)));
 		
-		cnx.sendRequest("DeleteItem ", {
+		var result = cnx.sendRequest("DeleteItem ", {
 			TableName: getTableName(),
 			Key: key
 		});
+		#if js
+		return result.then(function (_) {
+			return obj;
+		});
+		#end
 	}
 	
 	public function doSerialize( field : String, v : Dynamic ) : haxe.io.Bytes {
@@ -345,7 +381,7 @@ class Manager<T:sys.db.Object> {
 		return s.toString();
 	}
 	
-	public function createTable (?shardDate:Date):Void {
+	public function createTable (?shardDate:Date): #if js promhx.Promise<Dynamic> #else Void #end {
 		var infos = getInfos();
 		
 		var attrFields = new Array<String>();
@@ -424,14 +460,31 @@ class Manager<T:sys.db.Object> {
 		if (globalIndexes.length > 0) Reflect.setField(req, "GlobalSecondaryIndexes", globalIndexes);
 		if (localIndexes.length > 0) Reflect.setField(req, "LocalSecondaryIndexes", localIndexes);
 		
-		cnx.sendRequest("CreateTable", req);
+		var result = cnx.sendRequest("CreateTable", req);
+		#if js
+		return result.then(function (_) {
+			return null;
+		});
+		#end
 	}
 	
-	public function deleteTable (?shardDate:Date):Void {
-		cnx.sendRequest("DeleteTable", { TableName:getTableName(shardDate) } );
+	public function deleteTable (?shardDate:Date): #if js promhx.Promise<Dynamic> #else Void #end {
+		var result = cnx.sendRequest("DeleteTable", { TableName:getTableName(shardDate) } );
+		#if js
+		return result.then(function (_) {
+			return null;
+		});
+		#end
 	}
 	
-	public function tableExists (?shardDate:Date):Bool {
+	public function tableExists (?shardDate:Date): #if js promhx.Promise<Bool> #else Bool #end {
+		#if js
+		return cast cnx.sendRequest("DescribeTable", { TableName:getTableName(shardDate) } ).then(function (_) {
+			return true;
+		}).errorThen(function (_) {
+			return false;
+		});
+		#else
 		try {
 			cnx.sendRequest("DescribeTable", { TableName:getTableName(shardDate) } );
 			return true;
@@ -449,6 +502,7 @@ class Manager<T:sys.db.Object> {
 				return null;
 			}
 		}
+		#end
 	}
 	#end
 	
