@@ -683,4 +683,89 @@ class RecordMacros {
 		return null;
 	}
 	
+	public static function buildCondition (expr:Expr):Expr {
+		var attribNames:Dynamic = {};
+		var attribValues = new Array<{field:String, expr:Expr}>();
+		var vind = 0;
+		var nind = 0;
+		var p = expr.pos;
+		var convExpr = null;
+		
+		function convConst (e:Expr, c:Constant, p:Position):String {
+			return switch (c) {
+				case CInt(v), CFloat(v):
+					var n = 'av${vind++}';
+					attribValues.push({field:n, expr:macro { N: $e }});
+					':$n';
+				case CString(v):
+					var n = 'av${vind++}';
+					attribValues.push({field:n, expr:macro { S: $e }});
+					':$n';
+				case CIdent(s):
+					var isDb = s.charAt(0) == "$";
+					if (isDb) {
+						var n = 'an${nind++}';
+						Reflect.setField(attribNames, n, s.substr(1));
+						'#$n';
+					} else {
+						var n = 'av${vind++}';
+						attribValues.push({field:n, expr:macro { S: Std.string($e) }});
+						':$n';
+					}
+				default:
+					Context.error("Operator not supported.", p);
+			};
+		}
+		function convBinOp (op:Binop, e1:Expr, e2:Expr, p:Position):String {
+			return switch (op) {
+				case OpEq:
+					convExpr(e1) + " = " + convExpr(e2);
+				case OpNotEq:
+					convExpr(e1) + " <> " + convExpr(e2);
+				case OpLt:
+					convExpr(e1) + " < " + convExpr(e2);
+				case OpLte:
+					convExpr(e1) + " <= " + convExpr(e2);
+				case OpGt:
+					convExpr(e1) + " > " + convExpr(e2);
+				case OpGte:
+					convExpr(e1) + " >= " + convExpr(e2);
+				case OpAnd:
+					convExpr(e1) + " AND " + convExpr(e2);
+				case OpOr:
+					convExpr(e1) + " OR " + convExpr(e2);
+				default:
+					Context.error("Operator not supported.", p);
+			};
+		}
+		function convUnOp (op:Unop, e:Expr, p:Position):String {
+			return switch (op) {
+				case OpNot:
+					"NOT " + convExpr(e);
+				default:
+					Context.error("Operator not supported.", p);
+			};
+		}
+		convExpr = function (e:Expr):String {
+			return switch (e.expr) {
+				case EBinop(op, e1, e2):
+					'(' + convBinOp(op, e1, e2, e.pos) + ')';
+				case EUnop(op, postfix, e):
+					'(' + convUnOp(op, e, e.pos) + ')';
+				case EConst(c):
+					convConst(e, c, e.pos);
+				default:
+					Context.error("Unsupported conditional expression.", e.pos);
+			};
+		}
+		var dynamoExpr = convExpr(expr);
+		
+		var av = { expr:EObjectDecl(attribValues), pos:p };
+		return macro {
+			attribNames: ${Context.makeExpr(attribNames, p)},
+			attribValues: $av,
+			expr: ${Context.makeExpr(dynamoExpr, p)},
+		};
+	}
+	
 }

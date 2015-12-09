@@ -4,6 +4,7 @@ import aws.dynamodb.DynamoDBError;
 import aws.dynamodb.DynamoDBException;
 import aws.dynamodb.RecordInfos;
 import haxe.crypto.Base64;
+import haxe.Json;
 
 using Lambda;
 
@@ -131,13 +132,24 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		throw "Unknown DynamoDB type.";
 	}
 	
+	public function duplicate (type:RecordType, v:Dynamic):Dynamic {
+		//TODO this could probably be optimized
+		return decodeVal(encodeVal(v, type), type);
+	}
+	
 	function buildSpodObject (item:Dynamic):T {
 		var infos = getInfos();
 		
 		var spod = Type.createInstance(cls, []);
+		var lastSeen:Dynamic = {};
 		for (i in Reflect.fields(item)) {
-			if (infos.fields.exists(function (e) { return e.name == i; } )) Reflect.setField(spod, i, dynamoToHaxe(i, Reflect.field(item, i)));
+			if (infos.fields.exists(function (e) { return e.name == i; } )) {
+				Reflect.setField(spod, i, dynamoToHaxe(i, Reflect.field(item, i)));
+				Reflect.setField(lastSeen, i, dynamoToHaxe(i, Reflect.field(item, i)));
+			}
 		}
+		//__last used to check for fields that have changed since last sync
+		Reflect.setField(spod, "__last", lastSeen);
 		return spod;
 	}
 	
@@ -229,6 +241,59 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		return obj;
 	}
 	
+	function hasChanged (type:RecordType, val1:Dynamic, val2:Dynamic):Bool {
+		return switch (type) {
+			case DString, DFloat, DBool, DInt: val1 != val2;
+			case DDate, DDateTime: (val1 == null && val2 != null) || (val1 != null && val2 == null) || val1.getTime() != val2.getTime();
+			case DTimeStamp:
+				if (val1 != null && Std.is(val1, Float)) val1 = Date.fromTime(val1);
+				if (val2 != null && Std.is(val2, Float)) val2 = Date.fromTime(val2);
+				(val1 == null && val2 != null) || (val1 != null && val2 == null) || val1.getTime() != val2.getTime();
+			case DBinary: (val1 == null && val2 != null) || (val1 != null && val2 == null) || val1.toHex() != val2.toHex();
+			case DEnum(e):
+				if (val1 != null && !Std.is(val1, Int)) val1 = Type.enumIndex(val1);
+				if (val2 != null && !Std.is(val2, Int)) val2 = Type.enumIndex(val2);
+				val1 != val2;
+			case DSet(t):
+				//Make sure list lengths match
+				if (val1 != null && val2 != null && val1.length == val2.length) {
+					var diff = false;
+					var arr1:Array<Dynamic> = Lambda.array(val1);
+					var arr2:Array<Dynamic> = Lambda.array(val2);
+					for (i in 0 ... arr1.length) {
+						if (hasChanged(t, arr1[i], arr2[i])) {
+							diff = true;
+							
+							break;
+						}
+					}
+					diff;
+				} else {
+					(val1 == null && val2 != null) || (val1 != null && val2 == null);
+				}
+		};
+	}
+	
+	function buildUpdateFields (spod:T):Dynamic {
+		var infos = getInfos();
+		var fields:Dynamic = { };
+		
+		for (i in infos.fields) {
+			var v = Reflect.field(spod, i.name);
+			if (hasChanged(i.type, v, Reflect.field(Reflect.field(spod, "__last"), i.name))) {
+				if (v != null) {
+					if (Std.is(v, String) && cast(v, String).length == 0) throw "String values must have length greater than 0.";
+					
+					Reflect.setField(fields, i.name, { Action:"PUT", Value:haxeToDynamo(i.name, v) });
+				} else {
+					Reflect.setField(fields, i.name, { Action:"DELETE" });
+				}
+			}
+		}
+		
+		return fields;
+	}
+	
 	function buildFields (spod:T):Dynamic {
 		var infos = getInfos();
 		var fields:Dynamic = { };
@@ -262,18 +327,74 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 	}
 	
 	public function doUpdate (obj:T): #if js promhx.Promise<T> #else Void #end {
+		return doConditionalUpdate (obj, null);
+	}
+	
+	function convertUpdateFieldsToExpr (fields:Dynamic, attribValues:Dynamic, attribNames:Dynamic):String {
+		var index = 0;
+		var updates = new Array<String>();
+		
+		for (i in Reflect.fields(fields)) {
+			var item = Reflect.field(fields, i);
+			var av = ':dv${index++}';
+			var an = '#dn${index++}';
+			Reflect.setField(attribNames, an, i);
+			switch (item.Action) {
+				case "PUT":
+					Reflect.setField(attribValues, av, item.Value);
+					updates.push('SET $an = $av');
+				case "DELETE": updates.push('REMOVE $an');
+				default:
+			}
+		}
+		
+		return updates.join(',');
+	}
+	
+	public function doConditionalUpdate (obj:T, ?condition: { attribNames:Dynamic, attribValues:Dynamic, expr:Dynamic }): #if js promhx.Promise<T> #else Void #end {
 		var infos = getInfos();
 		checkKeyExists(obj, infos.primaryIndex);
 		
-		var result = cnx.sendRequest("PutItem ", {
+		var key = { };
+		Reflect.setField(key, infos.primaryIndex.hash, haxeToDynamo(infos.primaryIndex.hash, Reflect.field(obj, infos.primaryIndex.hash)));
+		if (infos.primaryIndex.range != null) Reflect.setField(key, infos.primaryIndex.range, haxeToDynamo(infos.primaryIndex.range, Reflect.field(obj, infos.primaryIndex.range)));
+		
+		var updateFields = buildUpdateFields(obj);
+		var query = {
 			TableName: getTableName(),
-			Expected: buildRecordExpected(obj, infos.primaryIndex, true),
-			Item: buildFields(obj)
-		});
+			Key: key
+		};
+		if (condition != null) {
+			//Add prefixes to names and values
+			for (i in Reflect.fields(condition.attribNames)) {
+				Reflect.setField(condition.attribNames, '#$i', Reflect.field(condition.attribNames, i));
+				Reflect.deleteField(condition.attribNames, i);
+			}
+			for (i in Reflect.fields(condition.attribValues)) {
+				Reflect.setField(condition.attribValues, ':$i', Reflect.field(condition.attribValues, i));
+				Reflect.deleteField(condition.attribValues, i);
+			}
+			
+			Reflect.setField(query, "ConditionExpression", condition.expr);
+			Reflect.setField(query, "ExpressionAttributeNames", condition.attribNames);
+			Reflect.setField(query, "ExpressionAttributeValues", condition.attribValues);
+			Reflect.setField(query, "UpdateExpression", convertUpdateFieldsToExpr(updateFields, condition.attribValues, condition.attribNames));
+		} else {
+			Reflect.setField(query, "AttributeUpdates", updateFields);
+		}
+		var result = cnx.sendRequest("UpdateItem ", query);
 		#if js
 		return result.then(function (_) {
+			for (i in Reflect.fields(updateFields)) {
+				Reflect.setField(Reflect.field(obj, "__last"), i, dynamoToHaxe(i, Reflect.field(updateFields, i).Value));
+			}
+			
 			return obj;
 		});
+		#else
+		for (i in Reflect.fields(updateFields)) {
+			Reflect.setField(Reflect.field(obj, "__last"), i, dynamoToHaxe(i, Reflect.field(updateFields, i).Value));
+		}
 		#end
 	}
 	

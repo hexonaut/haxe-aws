@@ -7,21 +7,23 @@ package aws.dynamodb;
  */
 @:skip
 #if !macro @:autoBuild(aws.dynamodb.RecordMacros.macroBuild()) #end
-class Object #if !js extends sys.db.Object #end {
+class Object #if (!js && !macro) extends sys.db.Object #end {
 	
 	#if js
 	var _manager(default,never) : aws.dynamodb.Manager<Dynamic>;
-	@:keep var __cache__:Dynamic;
 	#end
 
 	public function new () {
-		#if !js
+		#if (!js && !macro)
 		super();
 		#end
 		
+		#if !macro
 		if ( _manager == null ) untyped _manager = Type.getClass(this).manager;
+		#end
 	}
 	
+	#if !macro
 	#if js
 	public function insert () {
 		return untyped _manager.doInsert(this);
@@ -52,8 +54,13 @@ class Object #if !js extends sys.db.Object #end {
 	}
 	#end
 	
-	public function put ():Void {
+	public function put () {
 		return untyped _manager.doPut(this);
+	}
+	#end
+	
+	public macro function conditionalUpdate (ethis, expr:haxe.macro.Expr.ExprOf<Bool>) {
+		return macro untyped $ethis._manager.doConditionalUpdate($ethis, ${ RecordMacros.buildCondition(expr) });
 	}
 	
 }

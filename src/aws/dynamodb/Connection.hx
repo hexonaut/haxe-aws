@@ -100,7 +100,17 @@ class Connection {
 		if (config.ssl) sock = new PersistantSocket(new sys.ssl.Socket());
 		else sock = new PersistantSocket(new sys.net.Socket());
 		
-		sock.actualConnect(new sys.net.Host(config.host), config.ssl ? 443 : 80);
+		var hostPort = config.host.split(":");
+		var host;
+		var port;
+		if (hostPort.length >= 2) {
+			host = hostPort[0];
+			port = Std.parseInt(hostPort[1]);
+		} else {
+			host = hostPort[0];
+			port = config.ssl ? 443 : 80;
+		}
+		sock.actualConnect(new sys.net.Host(host), port);
 		#end
 	}
 	
@@ -133,7 +143,6 @@ class Connection {
 		if (!connected) connect();
 		
 		var conn = new Sig4Http((config.ssl ? "https" : "http") + "://" + config.host + "/", config);
-		
 		conn.setHeader("content-type", "application/x-amz-json-1.0; charset=utf-8");
 		conn.setHeader("x-amz-target", SERVICE + "_" + API_VERSION + "." + operation);
 		conn.setHeader("Connection", "Keep-Alive");
