@@ -691,6 +691,13 @@ class RecordMacros {
 		var p = expr.pos;
 		var convExpr = null;
 		
+		function isString (type:Type):Bool {
+			return switch (type) {
+				case TInst(t, _):
+					t.toString() == "String";
+				default: false;
+			};
+		}
 		function convConst (e:Expr, c:Constant, p:Position):String {
 			return switch (c) {
 				case CInt(v), CFloat(v):
@@ -709,7 +716,8 @@ class RecordMacros {
 						'#$n';
 					} else {
 						var n = 'av${vind++}';
-						attribValues.push({field:n, expr:macro { S: Std.string($e) }});
+						if (isString(Context.follow(Context.typeof(e)))) attribValues.push( { field:n, expr:macro { S: Std.string($e) }} );
+						else attribValues.push( { field:n, expr:macro { N: Std.string($e) }} );
 						':$n';
 					}
 				default:
