@@ -188,6 +188,10 @@ class RecordMacros {
 							case TPType(ct): ct;
 							case TPExpr(e): Context.error("Invalid type.", e.pos);
 						}, pos)});
+					case "SUniqueSet": macro DUniqueSet(${complexTypeToRecordTypeExpr(switch (p.params[0]) {
+							case TPType(ct): ct;
+							case TPExpr(e): Context.error("Invalid type.", e.pos);
+						}, pos)});
 					case "SDeltaInt": macro DDeltaInt;
 					case "SDeltaFloat": macro DDeltaFloat;
 					default:
@@ -700,6 +704,22 @@ class RecordMacros {
 				default: false;
 			};
 		}
+		function convCall (e:Expr, params:Array<Expr>, p:Position):String {
+			return switch (e.expr) {
+				case EField(e, f):
+					if (f == "contains") {
+						if (params.length == 1) {
+							'contains(${convExpr(e)}, ${convExpr(params[0])})';
+						} else {
+							Context.error("Contains function must have only 1 argument.", p);
+						}
+					} else {
+						Context.error("Function is not supported.", p);
+					}
+				default:
+					Context.error("Call not supported.", p);
+			};
+		}
 		function convConst (e:Expr, c:Constant, p:Position):String {
 			return switch (c) {
 				case CInt(v), CFloat(v):
@@ -764,6 +784,8 @@ class RecordMacros {
 					'(' + convUnOp(op, e, e.pos) + ')';
 				case EConst(c):
 					convConst(e, c, e.pos);
+				case ECall(e, params):
+					convCall(e, params, e.pos);
 				default:
 					Context.error("Unsupported conditional expression.", e.pos);
 			};

@@ -28,3 +28,6 @@ typedef SSet<T> = Array<T>;
 /** Same as SInt, SFloat counterparts, but object updates apply an ADD instead of SET to change value for atomic updates. */
 typedef SDeltaInt = Int;
 typedef SDeltaFloat = Float;
+
+/** Same as SSet counterpart, but adds or removes objects atomically. */
+typedef SUniqueSet<T> = Array<T>;

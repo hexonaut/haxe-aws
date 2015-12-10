@@ -76,7 +76,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			case DBinary: {t:"B", v:Base64.encode(val)};
 			case DEnum(e) if (Std.is(val, Int)): { t:"N", v:Std.string(val) };
 			case DEnum(e): { t:"N", v:Std.string(Type.enumIndex(val)) };
-			case DSet(t):
+			case DSet(t), DUniqueSet(t):
 				var dtype = switch (t) {
 					case DString: "SS";
 					case DBinary: "BS";
@@ -112,7 +112,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			case DTimeStamp: Std.parseFloat(val);
 			case DBinary: Base64.decode(val);
 			case DEnum(e): Std.parseInt(val);
-			case DSet(t):
+			case DSet(t), DUniqueSet(t):
 				var list = new Array<Dynamic>();
 				for (i in cast(val, Array<Dynamic>)) {
 					list.push(decodeVal(i, t));
@@ -254,7 +254,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 				if (val1 != null && !Std.is(val1, Int)) val1 = Type.enumIndex(val1);
 				if (val2 != null && !Std.is(val2, Int)) val2 = Type.enumIndex(val2);
 				val1 != val2;
-			case DSet(t):
+			case DSet(t), DUniqueSet(t):
 				//Make sure list lengths match
 				if (val1 != null && val2 != null && val1.length == val2.length) {
 					var diff = false;
@@ -269,9 +269,27 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 					}
 					diff;
 				} else {
-					(val1 == null && val2 != null) || (val1 != null && val2 == null);
+					(val1 == null && val2 != null) || (val1 != null && val2 == null) || (val1 != null && val2 != null && val1.length != val2.length);
 				}
 		};
+	}
+	
+	function arrDiff (oldArr:Array<Dynamic>, newArr:Array<Dynamic>): { add:Array<Dynamic>, remove:Array<Dynamic> } {
+		var add = new Array<Dynamic>();
+		var remove = new Array<Dynamic>();
+		
+		for (i in oldArr) {
+			if (!Lambda.has(newArr, i)) {
+				remove.push(i);
+			}
+		}
+		for (i in newArr) {
+			if (!Lambda.has(oldArr, i)) {
+				add.push(i);
+			}
+		}
+		
+		return { add:add, remove:remove };
 	}
 	
 	function buildUpdateFields (spod:T):Dynamic {
@@ -279,14 +297,20 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		var fields:Dynamic = { };
 		
 		for (i in infos.fields) {
-			var v = Reflect.field(spod, i.name);
-			var oldVal = Reflect.field(Reflect.field(spod, "__last"), i.name);
+			var v:Dynamic = Reflect.field(spod, i.name);
+			var oldVal:Dynamic = Reflect.field(Reflect.field(spod, "__last"), i.name);
 			if (hasChanged(i.type, v, oldVal)) {
 				if (v != null) {
 					if (Std.is(v, String) && cast(v, String).length == 0) throw "String values must have length greater than 0.";
 					
-					if (i.type.match(DDeltaFloat | DDeltaInt) && oldVal != null) {
-						Reflect.setField(fields, i.name, { Action:"ADD", Value:haxeToDynamo(i.name, v - oldVal) } );
+					if (i.type.match(DDeltaFloat | DDeltaInt | DUniqueSet(_)) && oldVal != null) {
+						if (i.type.match(DUniqueSet(_))) {
+							var diff = arrDiff(oldVal, v);
+							if (diff.add.length > 0) Reflect.setField(fields, i.name, { Action:"ADD", Value:haxeToDynamo(i.name, diff.add) } );
+							if (diff.remove.length > 0) Reflect.setField(fields, i.name, { Action:"DELETE", Value:haxeToDynamo(i.name, diff.remove) } );
+						} else {
+							Reflect.setField(fields, i.name, { Action:"ADD", Value:haxeToDynamo(i.name, v - oldVal) } );
+						}
 					} else {
 						Reflect.setField(fields, i.name, { Action:"PUT", Value:haxeToDynamo(i.name, v) } );
 					}
@@ -351,7 +375,13 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 				case "ADD":
 					Reflect.setField(attribValues, av, item.Value);
 					updates.push('ADD $an $av');
-				case "DELETE": updates.push('REMOVE $an');
+				case "DELETE":
+					if (item.Value != null) {
+						Reflect.setField(attribValues, av, item.Value);
+						updates.push('DELETE $an $av');
+					} else {
+						updates.push('REMOVE $an');
+					}
 				default:
 			}
 		}
@@ -368,6 +398,13 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		if (infos.primaryIndex.range != null) Reflect.setField(key, infos.primaryIndex.range, haxeToDynamo(infos.primaryIndex.range, Reflect.field(obj, infos.primaryIndex.range)));
 		
 		var updateFields = buildUpdateFields(obj);
+		if (Reflect.fields(updateFields).length == 0) {
+			#if js
+			return promhx.Promise.promise(obj);
+			#else
+			return;
+			#end
+		}
 		var query = {
 			TableName: getTableName(),
 			Key: key

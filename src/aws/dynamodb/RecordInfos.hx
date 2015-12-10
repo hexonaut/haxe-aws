@@ -35,4 +35,5 @@ enum RecordType {
 	DSet(type:RecordType);
 	DDeltaFloat;
 	DDeltaInt;
+	DUniqueSet(type:RecordType);
 }
