@@ -707,14 +707,21 @@ class RecordMacros {
 		function convCall (e:Expr, params:Array<Expr>, p:Position):String {
 			return switch (e.expr) {
 				case EField(e, f):
-					if (f == "contains") {
-						if (params.length == 1) {
-							'contains(${convExpr(e)}, ${convExpr(params[0])})';
-						} else {
-							Context.error("Contains function must have only 1 argument.", p);
-						}
-					} else {
-						Context.error("Function is not supported.", p);
+					switch (f) {
+						case "contains":
+							if (params.length == 1) {
+								'contains(${convExpr(e)}, ${convExpr(params[0])})';
+							} else {
+								Context.error("Contains function must have only 1 argument.", p);
+							}
+						case "size":
+							if (params.length == 0) {
+								'size(${convExpr(e)})';
+							} else {
+								Context.error("Size takes no arguments.", p);
+							}
+						default:
+							Context.error("Function is not supported.", p);
 					}
 				default:
 					Context.error("Call not supported.", p);
@@ -760,9 +767,9 @@ class RecordMacros {
 					convExpr(e1) + " > " + convExpr(e2);
 				case OpGte:
 					convExpr(e1) + " >= " + convExpr(e2);
-				case OpAnd:
+				case OpBoolAnd:
 					convExpr(e1) + " AND " + convExpr(e2);
-				case OpOr:
+				case OpBoolOr:
 					convExpr(e1) + " OR " + convExpr(e2);
 				default:
 					Context.error("Operator not supported.", p);
