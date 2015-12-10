@@ -33,4 +33,6 @@ enum RecordType {
 	DTimeStamp;
 	DEnum(e:Enum<Dynamic>);
 	DSet(type:RecordType);
+	DDeltaFloat;
+	DDeltaInt;
 }

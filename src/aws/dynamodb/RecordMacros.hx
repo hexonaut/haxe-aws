@@ -188,6 +188,8 @@ class RecordMacros {
 							case TPType(ct): ct;
 							case TPExpr(e): Context.error("Invalid type.", e.pos);
 						}, pos)});
+					case "SDeltaInt": macro DDeltaInt;
+					case "SDeltaFloat": macro DDeltaFloat;
 					default:
 						var type = Context.getType((p.pack.length > 0 ? p.pack.join(".") : "") + p.name);
 						if (type != null) {

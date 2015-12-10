@@ -64,7 +64,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 	function encodeVal (val:Dynamic, type:RecordType): { t:String, v:Dynamic } {
 		return switch (type) {
 			case DString: {t:"S", v:val};
-			case DFloat, DInt: {t:"N", v:Std.string(val)};
+			case DFloat, DInt, DDeltaFloat, DDeltaInt: {t:"N", v:Std.string(val)};
 			case DBool: {t:"N", v:(val ? "1" : "0")};
 			case DDate:
 				var date = cast(val, Date);
@@ -105,8 +105,8 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 	function decodeVal (val:Dynamic, type:RecordType):Dynamic {
 		return switch (type) {
 			case DString: val;
-			case DFloat: Std.parseFloat(val);
-			case DInt: Std.parseInt(val);
+			case DFloat, DDeltaFloat: Std.parseFloat(val);
+			case DInt, DDeltaInt: Std.parseInt(val);
 			case DBool: val == "1";
 			case DDate, DDateTime: Date.fromTime(Std.parseFloat(val));
 			case DTimeStamp: Std.parseFloat(val);
@@ -243,7 +243,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 	
 	function hasChanged (type:RecordType, val1:Dynamic, val2:Dynamic):Bool {
 		return switch (type) {
-			case DString, DFloat, DBool, DInt: val1 != val2;
+			case DString, DFloat, DBool, DInt, DDeltaInt, DDeltaFloat: val1 != val2;
 			case DDate, DDateTime: (val1 == null && val2 != null) || (val1 != null && val2 == null) || val1.getTime() != val2.getTime();
 			case DTimeStamp:
 				if (val1 != null && Std.is(val1, Float)) val1 = Date.fromTime(val1);
@@ -280,11 +280,16 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		
 		for (i in infos.fields) {
 			var v = Reflect.field(spod, i.name);
-			if (hasChanged(i.type, v, Reflect.field(Reflect.field(spod, "__last"), i.name))) {
+			var oldVal = Reflect.field(Reflect.field(spod, "__last"), i.name);
+			if (hasChanged(i.type, v, oldVal)) {
 				if (v != null) {
 					if (Std.is(v, String) && cast(v, String).length == 0) throw "String values must have length greater than 0.";
 					
-					Reflect.setField(fields, i.name, { Action:"PUT", Value:haxeToDynamo(i.name, v) });
+					if (i.type.match(DDeltaFloat | DDeltaInt) && oldVal != null) {
+						Reflect.setField(fields, i.name, { Action:"ADD", Value:haxeToDynamo(i.name, v - oldVal) } );
+					} else {
+						Reflect.setField(fields, i.name, { Action:"PUT", Value:haxeToDynamo(i.name, v) } );
+					}
 				} else {
 					Reflect.setField(fields, i.name, { Action:"DELETE" });
 				}
@@ -343,6 +348,9 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 				case "PUT":
 					Reflect.setField(attribValues, av, item.Value);
 					updates.push('SET $an = $av');
+				case "ADD":
+					Reflect.setField(attribValues, av, item.Value);
+					updates.push('ADD $an $av');
 				case "DELETE": updates.push('REMOVE $an');
 				default:
 			}
