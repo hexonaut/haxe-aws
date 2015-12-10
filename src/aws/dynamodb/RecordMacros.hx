@@ -657,7 +657,7 @@ class RecordMacros {
 					case "String": failure = rt != DString;
 					case "Date": failure = rt != DDate && rt != DDateTime && rt != DTimeStamp;
 					case "haxe.io.Bytes": failure = rt != DBinary;
-					case "List": failure = std.Type.enumConstructor(rt) != "DSet";
+					case "Array": failure = std.Type.enumConstructor(rt) != "DSet";
 					default:
 				}
 			case TAbstract(a, _):

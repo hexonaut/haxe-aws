@@ -83,7 +83,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 					default: "NS";
 				}
 				var list = new Array<Dynamic>();
-				for (i in cast(val, List<Dynamic>)) {
+				for (i in cast(val, Array<Dynamic>)) {
 					list.push(encodeVal(i, t).v);
 				}
 				if (list.length == 0) throw "Set must contain at least one value.";
@@ -113,9 +113,9 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			case DBinary: Base64.decode(val);
 			case DEnum(e): Std.parseInt(val);
 			case DSet(t):
-				var list = new List<Dynamic>();
+				var list = new Array<Dynamic>();
 				for (i in cast(val, Array<Dynamic>)) {
-					list.add(decodeVal(i, t));
+					list.push(decodeVal(i, t));
 				}
 				list;
 		};

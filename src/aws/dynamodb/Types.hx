@@ -23,7 +23,7 @@ typedef STimeStamp = Date;
 typedef SEnum<E:EnumValue> = E;
 
 /** Store data in a set */
-typedef SSet<T> = List<T>;
+typedef SSet<T> = Array<T>;
 
 /** Same as SInt, SFloat counterparts, but object updates apply an ADD instead of SET to change value for atomic updates. */
 typedef SDeltaInt = Int;
