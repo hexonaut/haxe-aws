@@ -745,7 +745,8 @@ class RecordMacros {
 						'#$n';
 					} else {
 						var n = 'av${vind++}';
-						if (isString(Context.follow(Context.typeof(e)))) attribValues.push( { field:n, expr:macro { S: Std.string($e) }} );
+						var isStr = isString(Context.follow(Context.typeof(e)));
+						if (isStr) attribValues.push( { field:n, expr:macro { S: Std.string($e) }} );
 						else attribValues.push( { field:n, expr:macro { N: Std.string($e) }} );
 						':$n';
 					}
