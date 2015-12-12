@@ -5,6 +5,8 @@ import aws.dynamodb.DynamoDBException;
 import aws.dynamodb.RecordInfos;
 import haxe.crypto.Base64;
 import haxe.Json;
+import haxe.Serializer;
+import haxe.Unserializer;
 
 using Lambda;
 
@@ -76,6 +78,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			case DBinary: {t:"B", v:Base64.encode(val)};
 			case DEnum(e) if (Std.is(val, Int)): { t:"N", v:Std.string(val) };
 			case DEnum(e): { t:"N", v:Std.string(Type.enumIndex(val)) };
+			case DData: { t:"S", v:Serializer.run(val) };
 			case DSet(t), DUniqueSet(t):
 				var dtype = switch (t) {
 					case DString: "SS";
@@ -112,6 +115,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			case DTimeStamp: Std.parseFloat(val);
 			case DBinary: Base64.decode(val);
 			case DEnum(e): Std.parseInt(val);
+			case DData: Unserializer.run(val);
 			case DSet(t), DUniqueSet(t):
 				var list = new Array<Dynamic>();
 				for (i in cast(val, Array<Dynamic>)) {
@@ -254,6 +258,8 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 				if (val1 != null && !Std.is(val1, Int)) val1 = Type.enumIndex(val1);
 				if (val2 != null && !Std.is(val2, Int)) val2 = Type.enumIndex(val2);
 				val1 != val2;
+			case DData:
+				Serializer.run(val1) != Serializer.run(val2);
 			case DSet(t), DUniqueSet(t):
 				//Make sure list lengths match
 				if (val1 != null && val2 != null && val1.length == val2.length) {

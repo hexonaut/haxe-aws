@@ -194,6 +194,7 @@ class RecordMacros {
 						}, pos)});
 					case "SDeltaInt": macro DDeltaInt;
 					case "SDeltaFloat": macro DDeltaFloat;
+					case "SData": macro DData;
 					default:
 						var type = Context.getType((p.pack.length > 0 ? p.pack.join(".") : "") + p.name);
 						if (type != null) {
@@ -248,6 +249,7 @@ class RecordMacros {
 	public static function macroBuild ():Array<Field> {
 		var cls = Context.getLocalClass().get();
 		var fields = Context.getBuildFields();
+		if (cls.meta.has(":skip")) return null;
 		var p = Context.currentPos();
 		
 		//Prevent sys.db.Object autobuild macro from building db infos
@@ -319,6 +321,8 @@ class RecordMacros {
 					}
 				}
 			} else {
+				if (i.access != null && Lambda.has(i.access, AStatic)) continue;	//Skip over static fields
+				
 				var type = null;
 				
 				switch (i.kind) {

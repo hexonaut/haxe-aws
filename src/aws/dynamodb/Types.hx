@@ -31,3 +31,6 @@ typedef SDeltaFloat = Float;
 
 /** Same as SSet counterpart, but adds or removes objects atomically. */
 typedef SUniqueSet<T> = Array<T>;
+
+/** Store any data type using haxe.Serializer */
+typedef SData<T> = T;
