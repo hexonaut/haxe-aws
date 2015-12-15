@@ -25,15 +25,15 @@ class Object #if (!js && !macro) extends sys.db.Object #end {
 	
 	#if !macro
 	#if js
-	public function insert () {
+	public function insert ():promhx.Promise<Dynamic> {
 		return untyped _manager.doInsert(this);
 	}
 
-	public function update () {
+	public function update ():promhx.Promise<Dynamic> {
 		return untyped _manager.doUpdate(this);
 	}
 
-	public function delete () {
+	public function delete ():promhx.Promise<Dynamic> {
 		return untyped _manager.doDelete(this);
 	}
 
@@ -54,7 +54,7 @@ class Object #if (!js && !macro) extends sys.db.Object #end {
 	}
 	#end
 	
-	public function put () {
+	public function put () : #if js promhx.Promise<Dynamic> #else Void #end {
 		return untyped _manager.doPut(this);
 	}
 	#end

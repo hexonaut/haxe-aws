@@ -63,7 +63,7 @@ class RecordMacros {
 					if (i.params.length > 2) key.range = exprToString(i.params[2]);
 					obj.indexes.push({name:exprToString(i.params[0]), index:key, global:false});
 				case ":gindex":
-					var key:Dynamic = { };
+					var key:Dynamic = { hash:null, range:null };
 					var readCap:Int = null;
 					var writeCap:Int = null;
 					key.hash = exprToString(i.params[1]);
