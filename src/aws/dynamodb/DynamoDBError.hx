@@ -27,6 +27,6 @@ enum DynamoDBError {
 	MissingAuthenticationTokenException;
 	ResourceInUseException;
 	ResourceNotFoundException;
-	ValidationException;
+	ValidationException(msg:String);
 	RequestTooLarge;
 }

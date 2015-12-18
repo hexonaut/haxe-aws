@@ -130,7 +130,10 @@ class Connection {
 		
 		if (httpCode == 413) throw RequestTooLarge;
 		for (i in Type.getEnumConstructs(DynamoDBError)) {
-			if (type == i) throw Type.createEnum(DynamoDBError, i);
+			if (type == i) {
+				if (type == "ValidationException") throw ValidationException(message);
+				else throw Type.createEnum(DynamoDBError, i);
+			}
 		}
 		for (i in Type.getEnumConstructs(DynamoDBException)) {
 			if (type == i) throw Type.createEnum(DynamoDBException, i);

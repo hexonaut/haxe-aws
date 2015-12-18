@@ -724,6 +724,18 @@ class RecordMacros {
 							} else {
 								Context.error("Size takes no arguments.", p);
 							}
+						case "exists":
+							if (params.length == 0) {
+								'attribute_exists(${convExpr(e)})';
+							} else {
+								Context.error("Size takes no arguments.", p);
+							}
+						case "notExists":
+							if (params.length == 0) {
+								'attribute_not_exists(${convExpr(e)})';
+							} else {
+								Context.error("Size takes no arguments.", p);
+							}
 						default:
 							Context.error("Function is not supported.", p);
 					}

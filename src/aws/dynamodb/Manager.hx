@@ -252,7 +252,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			case DTimeStamp:
 				if (val1 != null && Std.is(val1, Float)) val1 = Date.fromTime(val1);
 				if (val2 != null && Std.is(val2, Float)) val2 = Date.fromTime(val2);
-				(val1 == null && val2 != null) || (val1 != null && val2 == null) || val1.getTime() != val2.getTime();
+				(val1 == null && val2 != null) || (val1 != null && val2 == null) || (val1 != null && val2 != null && val1.getTime() != val2.getTime());
 			case DBinary: (val1 == null && val2 != null) || (val1 != null && val2 == null) || val1.toHex() != val2.toHex();
 			case DEnum(e):
 				if (val1 != null && !Std.is(val1, Int)) val1 = Type.enumIndex(val1);
@@ -367,7 +367,10 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 	
 	function convertUpdateFieldsToExpr (fields:Dynamic, attribValues:Dynamic, attribNames:Dynamic):String {
 		var index = 0;
-		var updates = new Array<String>();
+		var sets = new Array<String>();
+		var adds = new Array<String>();
+		var deletes = new Array<String>();
+		var removes = new Array<String>();
 		
 		for (i in Reflect.fields(fields)) {
 			var item = Reflect.field(fields, i);
@@ -377,22 +380,27 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			switch (item.Action) {
 				case "PUT":
 					Reflect.setField(attribValues, av, item.Value);
-					updates.push('SET $an = $av');
+					sets.push('$an = $av');
 				case "ADD":
 					Reflect.setField(attribValues, av, item.Value);
-					updates.push('ADD $an $av');
+					adds.push('$an $av');
 				case "DELETE":
 					if (item.Value != null) {
 						Reflect.setField(attribValues, av, item.Value);
-						updates.push('DELETE $an $av');
+						deletes.push('$an $av');
 					} else {
-						updates.push('REMOVE $an');
+						removes.push('$an');
 					}
 				default:
 			}
 		}
 		
-		return updates.join(',');
+		var str = "";
+		if (sets.length > 0) str += 'SET ${sets.join(", ")} ';
+		if (adds.length > 0) str += 'ADD ${adds.join(", ")} ';
+		if (deletes.length > 0) str += 'DELETE ${deletes.join(", ")} ';
+		if (removes.length > 0) str += 'REMOVE ${removes.join(", ")} ';
+		return str;
 	}
 	
 	public function doConditionalUpdate (obj:T, ?condition: { attribNames:Dynamic, attribValues:Dynamic, expr:Dynamic }): #if js promhx.Promise<T> #else Void #end {
