@@ -114,7 +114,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			case DDate, DDateTime: Date.fromTime(Std.parseFloat(val));
 			case DTimeStamp: Std.parseFloat(val);
 			case DBinary: Base64.decode(val);
-			case DEnum(e): Std.parseInt(val);
+			case DEnum(e): Type.createEnumIndex(e, val);
 			case DData: Unserializer.run(val);
 			case DSet(t), DUniqueSet(t):
 				var list = new Array<Dynamic>();
@@ -126,10 +126,13 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 	}
 	
 	public function dynamoToHaxe (name:String, v:Dynamic):Dynamic {
+		if (v == null) return null;
+		
 		var infos = getInfos();
 		
 		for (i in Reflect.fields(v)) {
 			var val = Reflect.field(v, i);
+			if (val == null) return null;
 			return decodeVal(val, getFieldType(name));
 		}
 		
@@ -348,16 +351,28 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 	public function doInsert (obj:T): #if js promhx.Promise<T> #else Void #end {
 		var infos = getInfos();
 		checkKeyExists(obj, infos.primaryIndex);
+		var item = buildFields(obj);
 		
 		var result = cnx.sendRequest("PutItem ", {
 			TableName: getTableName(),
 			Expected: buildRecordExpected(obj, infos.primaryIndex, false),
-			Item: buildFields(obj)
+			Item: item
 		});
 		#if js
 		return result.then(function (_) {
+			var last:Dynamic = {};
+			for (i in Reflect.fields(item)) {
+				Reflect.setField(last, i, dynamoToHaxe(i, Reflect.field(item, i)));
+			}
+			Reflect.setField(obj, "__last", last);
 			return obj;
 		});
+		#else
+		var last:Dynamic = {};
+		for (i in Reflect.fields(item)) {
+			Reflect.setField(last, i, dynamoToHaxe(i, Reflect.field(item, i)));
+		}
+		Reflect.setField(obj, "__last", last);
 		#end
 	}
 	
@@ -445,14 +460,14 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		#if js
 		return result.then(function (_) {
 			for (i in Reflect.fields(updateFields)) {
-				Reflect.setField(Reflect.field(obj, "__last"), i, dynamoToHaxe(i, Reflect.field(updateFields, i).Value));
+				Reflect.setField(Reflect.field(obj, "__last"), i, dynamoToHaxe(i, haxeToDynamo(i, Reflect.field(obj, i))));
 			}
 			
 			return obj;
 		});
 		#else
 		for (i in Reflect.fields(updateFields)) {
-			Reflect.setField(Reflect.field(obj, "__last"), i, dynamoToHaxe(i, Reflect.field(updateFields, i).Value));
+			Reflect.setField(Reflect.field(obj, "__last"), i, dynamoToHaxe(i, haxeToDynamo(i, Reflect.field(obj, i))));
 		}
 		#end
 	}
