@@ -78,6 +78,8 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			case DBinary: {t:"B", v:Base64.encode(val)};
 			case DEnum(e) if (Std.is(val, Int)): { t:"N", v:Std.string(val) };
 			case DEnum(e): { t:"N", v:Std.string(Type.enumIndex(val)) };
+			case DStringEnum(e) if (Std.is(val, Int)): { t:"S", v:Std.string(Type.createEnumIndex(e, val)) };
+			case DStringEnum(e): { t:"S", v:Std.string(val) };
 			case DData: { t:"S", v:Serializer.run(val) };
 			case DSet(t), DUniqueSet(t):
 				var dtype = switch (t) {
@@ -115,6 +117,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			case DTimeStamp: Std.parseFloat(val);
 			case DBinary: Base64.decode(val);
 			case DEnum(e): Type.createEnumIndex(e, val);
+			case DStringEnum(e): Type.createEnum(e, val);
 			case DData: Unserializer.run(val);
 			case DSet(t), DUniqueSet(t):
 				var list = new Array<Dynamic>();
@@ -144,7 +147,9 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		return decodeVal(encodeVal(v, type), type);
 	}
 	
-	function buildSpodObject (item:Dynamic):T {
+	function buildSpodObject (item:Dynamic):Null<T> {
+		if (Reflect.fields(item).length == 0) return null;
+		
 		var infos = getInfos();
 		
 		var spod = Type.createInstance(cls, []);
@@ -260,6 +265,10 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			case DEnum(e):
 				if (val1 != null && !Std.is(val1, Int)) val1 = Type.enumIndex(val1);
 				if (val2 != null && !Std.is(val2, Int)) val2 = Type.enumIndex(val2);
+				val1 != val2;
+			case DStringEnum(e):
+				if (val1 != null && !Std.is(val1, Int)) val1 = Std.string(val1);
+				if (val2 != null && !Std.is(val2, Int)) val2 = Std.string(val2);
 				val1 != val2;
 			case DData:
 				Serializer.run(val1) != Serializer.run(val2);
@@ -456,14 +465,29 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		} else {
 			Reflect.setField(query, "AttributeUpdates", updateFields);
 		}
+		var objLast = Reflect.field(obj, "__last");
+		if (objLast == null) return promhx.Promise.error("Object not in database.");
 		var result = cnx.sendRequest("UpdateItem ", query);
+		
 		#if js
+		//Update last fields
+		var oldLast:Dynamic = { };
+		for (i in Reflect.fields(updateFields)) {
+			Reflect.setField(oldLast, i, dynamoToHaxe(i, haxeToDynamo(i, Reflect.field(Reflect.field(obj, "__last"), i))));
+		}
+		for (i in Reflect.fields(updateFields)) {
+			Reflect.setField(objLast, i, dynamoToHaxe(i, haxeToDynamo(i, Reflect.field(obj, i))));
+		}
+		
 		return result.then(function (_) {
+			return obj;
+		}).errorPipe(function (err:Dynamic) {
+			//Reset update fields
 			for (i in Reflect.fields(updateFields)) {
-				Reflect.setField(Reflect.field(obj, "__last"), i, dynamoToHaxe(i, haxeToDynamo(i, Reflect.field(obj, i))));
+				Reflect.setField(Reflect.field(obj, "__last"), i, dynamoToHaxe(i, haxeToDynamo(i, Reflect.field(oldLast, i))));
 			}
 			
-			return obj;
+			return promhx.Promise.error(err);
 		});
 		#else
 		for (i in Reflect.fields(updateFields)) {

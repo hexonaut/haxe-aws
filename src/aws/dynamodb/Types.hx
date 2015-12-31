@@ -22,6 +22,9 @@ typedef STimeStamp = Date;
 /** Allow to store an enum value that does not have parameters as a simple int */
 typedef SEnum<E:EnumValue> = E;
 
+/** Allow to store an enum value that does not have parameters as a string */
+typedef SStringEnum<E:EnumValue> = E;
+
 /** Store data in a set */
 typedef SSet<T> = Array<T>;
 

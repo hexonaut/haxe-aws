@@ -184,6 +184,14 @@ class RecordMacros {
 								e;
 							}
 						});
+					case "SStringEnum": macro DStringEnum(${
+						switch (p.params[0]) {
+							case TPType(ct):
+								{ expr:EConst(CIdent(switch (ct) { case TPath(tp): tp.name; default: Context.error("Invalid type.", pos); ""; } )), pos:pos }
+							case TPExpr(e):
+								e;
+							}
+						});
 					case "SSet": macro DSet(${complexTypeToRecordTypeExpr(switch (p.params[0]) {
 							case TPType(ct): ct;
 							case TPExpr(e): Context.error("Invalid type.", e.pos);

@@ -21,7 +21,7 @@ package aws.dynamodb;
 
 enum DynamoDBError {
 	AccessDeniedException;
-	ConditionalCheckFailedException;
+	ConditionalCheckFailedException(query:String);
 	IncompleteSignatureException;
 	LimitExceededException;
 	MissingAuthenticationTokenException;

@@ -124,7 +124,7 @@ class Connection {
 		#end
 	}
 	
-	function formatError (httpCode:Int, type:String, message:String):Void {
+	function formatError (httpCode:Int, type:String, message:String, payload:String):Void {
 		var type = type.substr(type.indexOf("#") + 1);
 		var message = message;
 		
@@ -132,6 +132,7 @@ class Connection {
 		for (i in Type.getEnumConstructs(DynamoDBError)) {
 			if (type == i) {
 				if (type == "ValidationException") throw ValidationException(message);
+				else if (type == "ConditionalCheckFailedException") throw ConditionalCheckFailedException(payload);
 				else throw Type.createEnum(DynamoDBError, i);
 			}
 		}
@@ -149,7 +150,8 @@ class Connection {
 		conn.setHeader("content-type", "application/x-amz-json-1.0; charset=utf-8");
 		conn.setHeader("x-amz-target", SERVICE + "_" + API_VERSION + "." + operation);
 		conn.setHeader("Connection", "Keep-Alive");
-		conn.setPostData(Json.stringify(payload));
+		var payloadStr = Json.stringify(payload);
+		conn.setPostData(payloadStr);
 		
 		#if js
 		var d = new promhx.Deferred<Dynamic>();
@@ -161,7 +163,7 @@ class Connection {
 			try {
 				var out = Json.parse(conn.responseData);
 				try {
-					formatError(Std.parseInt(err.substr(err.indexOf("#") + 1)), out.__type, out.message);
+					formatError(Std.parseInt(err.substr(err.indexOf("#") + 1)), out.__type, out.message, payloadStr);
 				} catch (e:Dynamic) {
 					p.reject(e);
 				}
@@ -187,7 +189,7 @@ class Connection {
 		} catch (e:Dynamic) {
 			throw ConnectionInterrupted;
 		}
-		if (err != null) formatError(Std.parseInt(err.substr(err.indexOf("#") + 1)), out.__type, out.message);
+		if (err != null) formatError(Std.parseInt(err.substr(err.indexOf("#") + 1)), out.__type, out.message, payloadStr);
 		return out;
 		#end
 	}
