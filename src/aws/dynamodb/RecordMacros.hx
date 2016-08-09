@@ -66,13 +66,15 @@ class RecordMacros {
 					var key:Dynamic = { hash:null, range:null };
 					var readCap:Int = null;
 					var writeCap:Int = null;
+					var keysOnly:Bool = false;
 					key.hash = exprToString(i.params[1]);
 					if (i.params.length > 2) {
 						switch (i.params[2].expr) {
 							case EConst(c):
 								switch (c) {
 									case CIdent(s):
-										key.range = s;
+										if (s == "KeysOnly") keysOnly = true;
+										else key.range = s;
 									case CInt(s):
 										readCap = Std.parseInt(s);
 									default:
@@ -81,13 +83,40 @@ class RecordMacros {
 						}
 					}
 					if (i.params.length > 3) {
-						if (readCap != null) writeCap = exprToInt(i.params[3]);
-						else readCap = exprToInt(i.params[3]);
+						switch (i.params[3].expr) {
+							case EConst(c):
+								switch (c) {
+									case CIdent(s):
+										if (s == "KeysOnly") keysOnly = true;
+										else Context.error("Unknown flag.", i.params[3].pos);
+									case CInt(s):
+										if (readCap != null) writeCap = exprToInt(i.params[3]);
+										else readCap = exprToInt(i.params[3]);
+									default:
+								}
+							default:
+						}
 					}
 					if (i.params.length > 4) {
-						writeCap = exprToInt(i.params[4]);
+						switch (i.params[4].expr) {
+							case EConst(c):
+								switch (c) {
+									case CIdent(s):
+										if (s == "KeysOnly") keysOnly = true;
+										else Context.error("Unknown flag.", i.params[4].pos);
+									case CInt(s):
+										writeCap = exprToInt(i.params[4]);
+									default:
+								}
+							default:
+						}
 					}
-					obj.indexes.push({name:exprToString(i.params[0]), index:key, global:true, readCap:readCap, writeCap:writeCap});
+					if (i.params.length > 5) {
+						var str = exprToString(i.params[5]);
+						if (str == "KeysOnly") keysOnly = true;
+						else Context.error("Unknown flag.", i.params[5].pos);
+					}
+					obj.indexes.push({name:exprToString(i.params[0]), index:key, global:true, readCap:readCap, writeCap:writeCap, keysOnly:keysOnly});
 				default:
 					if (i.name.startsWith(":type_")) {
 						var name = null;
@@ -713,6 +742,10 @@ class RecordMacros {
 			return switch (type) {
 				case TInst(t, _):
 					t.toString() == "String";
+				case TAbstract(t, _):
+					var at = t.get();
+					if (at.name == "Float" || at.name == "Int") false;
+					else isString(t.get().type);
 				default: false;
 			};
 		}

@@ -5,7 +5,7 @@ typedef RecordInfos = {
 	table:String,
 	?shard:String,
 	primaryIndex:RecordIndex,
-	indexes:Array<{ name:String, index:RecordIndex, global:Bool, ?readCap:Int, ?writeCap:Int }>,
+	indexes:Array<{ name:String, index:RecordIndex, global:Bool, ?readCap:Int, ?writeCap:Int, ?keysOnly:Bool }>,
 	fields:Array<{ name:String, type:RecordType }>,
 	relations:Array<RecordRelation>,
 	?readCap:Int,

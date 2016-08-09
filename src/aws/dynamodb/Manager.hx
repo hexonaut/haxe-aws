@@ -220,15 +220,75 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			}
 		}
 		
+		function mapResults (result:Dynamic):List<T> {
+			var items = result.Items;
+			if (items == null) {
+				items = Reflect.field(result.Responses, getTableName());
+			}
+			return Lambda.map(items, function (e) { return buildSpodObject(e); } );
+		}
+		
 		Reflect.setField(query, "TableName", getTableName());
 		Reflect.setField(query, "ConsistentRead", consistent);
+		
+		//Check if we need to project onto the main table
+		function checkTableMapping (result:Dynamic):Null<Dynamic> {
+			var infos = getInfos();
+			var indexName = Reflect.field(query, "IndexName");
+			var batchGetQuery = null;
+			if (indexName != null && result.Items.length > 0) {
+				var sindex = getSecondaryIndex(indexName);
+				if (sindex.global && sindex.keysOnly) {
+					var items = cast(result.Items, Array<Dynamic>);
+					var keys = new Array<Dynamic>();
+					for (i in items) {
+						//Remove all properties not in the primary key
+						for (o in Reflect.fields(i)) {
+							if (o != infos.primaryIndex.hash && o != infos.primaryIndex.range) Reflect.deleteField(i, o);
+						}
+						keys.push(i);
+					}
+					
+					batchGetQuery = { RequestItems:{} };
+					Reflect.setField(batchGetQuery.RequestItems, getTableName(), {
+						Keys: keys,
+						ConsistentRead: consistent
+					});
+				}
+			}
+			return batchGetQuery;
+		}
+		
 		#if js
-		return cnx.sendRequest("Query", query).then(function (result) {
-			return Lambda.map(cast(result.Items, Array<Dynamic>), function (e) { return buildSpodObject(e); } );
+		return cnx.sendRequest("Query", query).pipe(function (result) {
+			var batchGetQuery = checkTableMapping(result);
+			if (batchGetQuery != null) {
+				return cnx.sendRequest("BatchGetItem", batchGetQuery).then(function (result) {
+					return mapResults(result);
+				});
+			} else {
+				return promhx.Promise.promise(mapResults(result));
+			}
 		});
 		#else
-		return Lambda.map(cast(cnx.sendRequest("Query", query).Items, Array<Dynamic>), function (e) { return buildSpodObject(e); } );
+		var result = cnx.sendRequest("Query", query);
+		var batchGetQuery = checkTableMapping(result);
+		if (batchGetQuery != null) {
+			result = cnx.sendRequest("BatchGetItem", batchGetQuery);
+		}
+		return mapResults(result);
 		#end
+	}
+	
+	function getSecondaryIndex (name:String) {
+		var infos = getInfos();
+		for (i in infos.indexes) {
+			if (i.name == name) {
+				return i;
+			}
+		}
+		
+		return null;
 	}
 	
 	function checkKeyExists (spod:T, index:RecordIndex):Void {
@@ -466,7 +526,11 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			Reflect.setField(query, "AttributeUpdates", updateFields);
 		}
 		var objLast = Reflect.field(obj, "__last");
+		#if js
 		if (objLast == null) return promhx.Promise.error("Object not in database.");
+		#else
+		if (objLast == null) throw "Object not in database.";
+		#end
 		var result = cnx.sendRequest("UpdateItem ", query);
 		
 		#if js
