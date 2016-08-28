@@ -4,8 +4,8 @@
   "tags": ["cross"],
   "description": "A Haxe library for communicating with the Amazon AWS (http://www.amazonaws.com) backend.",
   "contributors": ["Blank101"],
-  "releasenote": "Allow for global indicies to automatically project onto the main table with 'KeysOnly' flag. Removed haxe.crypto.* from library (it's been available in Haxe core for over a year now).",
-  "version": "0.3.0",
+  "releasenote": "When searching without a limit be sure to get all results.",
+  "version": "0.4.0",
   "url": "https://github.com/Blank101/haxe-aws",
   "dependencies": {
 

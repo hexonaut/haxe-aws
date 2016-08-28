@@ -47,6 +47,23 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 	}
 	
 	#if !macro
+	public macro function all (?consistant:Bool):#if js promhx.Promise<List<T>> #else List<T> #end {
+		#if js
+		return scanAll({
+			TableName: getTableName(),
+			ConsistentRead: consistent
+		}).then(function (items:Array<Dynamic>) {
+			return Lambda.map(items, function (e) { return buildSpodObject(e); } );
+		});
+		#else
+		var items = scanAll({
+			TableName: getTableName(),
+			ConsistentRead: consistent
+		});
+		return Lambda.map(items, function (e) { return buildSpodObject(e); } );
+		#end
+	}
+	
 	public function getInfos ():RecordInfos {
 		return untyped cls.__dynamodb_infos;
 	}
@@ -61,6 +78,15 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		}
 		
 		return null;
+	}
+	
+	function recordTypeToDynamoType (type:RecordType):String {
+		return switch (type) {
+			case DString, DStringEnum(_), DData: "S";
+			case DFloat, DBool, DDate, DDateTime, DTimeStamp, DEnum(_), DInt, DDeltaInt, DDeltaFloat: "N";
+			case DBinary: "B";
+			case DSet(t), DUniqueSet(t): recordTypeToDynamoType(t) + "S";
+		}
 	}
 	
 	function encodeVal (val:Dynamic, type:RecordType): { t:String, v:Dynamic } {
@@ -221,9 +247,12 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		}
 		
 		function mapResults (result:Dynamic):List<T> {
-			var items = result.Items;
-			if (items == null) {
-				items = Reflect.field(result.Responses, getTableName());
+			var items = result;
+			if (!Std.is(items, Array)) {
+				items = result.Items;
+				if (items == null) {
+					items = Reflect.field(result.Responses, getTableName());
+				}
 			}
 			return Lambda.map(items, function (e) { return buildSpodObject(e); } );
 		}
@@ -233,13 +262,17 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		
 		//Check if we need to project onto the main table
 		function checkTableMapping (result:Dynamic):Null<Dynamic> {
+			var items:Array<Dynamic> = result;
+			if (!Std.is(items, Array)) {
+				items = result.Items;
+			}
+			
 			var infos = getInfos();
 			var indexName = Reflect.field(query, "IndexName");
 			var batchGetQuery = null;
-			if (indexName != null && result.Items.length > 0) {
+			if (indexName != null && items.length > 0) {
 				var sindex = getSecondaryIndex(indexName);
 				if (sindex.global && sindex.keysOnly) {
-					var items = cast(result.Items, Array<Dynamic>);
 					var keys = new Array<Dynamic>();
 					for (i in items) {
 						//Remove all properties not in the primary key
@@ -260,10 +293,10 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		}
 		
 		#if js
-		return cnx.sendRequest("Query", query).pipe(function (result) {
+		return queryAll(query).pipe(function (result) {
 			var batchGetQuery = checkTableMapping(result);
 			if (batchGetQuery != null) {
-				return cnx.sendRequest("BatchGetItem", batchGetQuery).then(function (result) {
+				return batchGetAll(batchGetQuery).then(function (result) {
 					return mapResults(result);
 				});
 			} else {
@@ -271,10 +304,10 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			}
 		});
 		#else
-		var result = cnx.sendRequest("Query", query);
+		var result:Dynamic = queryAll(query);
 		var batchGetQuery = checkTableMapping(result);
 		if (batchGetQuery != null) {
-			result = cnx.sendRequest("BatchGetItem", batchGetQuery);
+			result = batchGetAll(batchGetQuery);
 		}
 		return mapResults(result);
 		#end
@@ -785,6 +818,167 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 				return null;
 			}
 		}
+		#end
+	}
+	
+	/**
+	 * Run the query to completion.
+	 */
+	public function queryAll (params:Dynamic): #if js promhx.Promise<Array<Dynamic>> #else Array<Dynamic> #end {
+		var rangeKeyName = getInfos().primaryIndex.range;
+		if (rangeKeyName == null) {
+			//Just forward to the query
+			#if js
+			return cnx.sendRequest("Query", params).then(function (result:Dynamic) {
+				return result.Items;
+			});
+			#else
+			return cnx.sendRequest("Query", params).Items;
+			#end
+		}
+		var rangeKeyType = recordTypeToDynamoType(getFieldType(rangeKeyName));
+		
+		//TODO exponential backoff
+		var result = new Array<Dynamic>();
+		#if js
+		var d = new promhx.Deferred<Array<Dynamic>>();
+		var p = d.promise();
+		#end
+		function doQuery (?exclStartKey:String) {
+			if (exclStartKey != null) {
+				params.ExclusiveStartKey = { };
+				
+				//Set hash
+				var hashKeyName = Reflect.field(params.KeyConditions, Reflect.fields(params.KeyConditions)[0]);
+				var hashKeyVal = Reflect.field(params.KeyConditions, hashKeyName).AttributeValueList[0];
+				Reflect.setField(params.ExclusiveStartKey, hashKeyName, hashKeyVal);
+				
+				//Set range key
+				var rangeKeyVal = { }
+				Reflect.setField(rangeKeyVal, rangeKeyType, exclStartKey);
+				Reflect.setField(params.ExclusiveStartKey, rangeKeyName, rangeKeyVal);
+			}
+			function pushResults (data:Dynamic) {
+				for (i in cast(data.Items, Array<Dynamic>)) {
+					result.push(i);
+				}
+				
+				if (data.LastEvaluatedKey != null) {
+					doQuery(Reflect.field(Reflect.field(data.LastEvaluatedKey, rangeKeyName), rangeKeyType));
+				} else {
+					#if js
+					d.resolve(result);
+					#end
+				}
+			}
+			#if js
+			cnx.sendRequest("Query", params).then(function (data:Dynamic) {
+				pushResults(data);
+			});
+			#else
+			var data = cnx.sendRequest("Query", params);
+			pushResults(data);
+			#end
+		}
+		doQuery(null);
+		
+		#if js
+		return p;
+		#else
+		return result;
+		#end
+	}
+	
+	public function scanAll (params:Dynamic): #if js promhx.Promise<Array<Dynamic>> #else Array<Dynamic> #end {
+		var hashKeyName = getInfos().primaryIndex.hash;
+		var hashKeyType = recordTypeToDynamoType(getFieldType(hashKeyName));
+		
+		//TODO exponential backoff
+		var result = new Array<Dynamic>();
+		#if js
+		var d = new promhx.Deferred<Array<Dynamic>>();
+		var p = d.promise();
+		#end
+		function doScan (?exclStartKey:String) {
+			if (exclStartKey != null) {
+				params.ExclusiveStartKey = { };
+				
+				//Set range key
+				var hashKeyVal = { };
+				Reflect.setField(hashKeyVal, hashKeyType, exclStartKey);
+				Reflect.setField(params.ExclusiveStartKey, hashKeyName, hashKeyVal);
+			}
+			function pushResults (data:Dynamic) {
+				for (i in cast(data.Items, Array<Dynamic>)) {
+					result.push(i);
+				}
+				
+				if (data.LastEvaluatedKey != null) {
+					doScan(Reflect.field(Reflect.field(data.LastEvaluatedKey, hashKeyName), hashKeyType));
+				} else {
+					#if js
+					d.resolve(result);
+					#end
+				}
+			}
+			#if js
+			cnx.sendRequest("Scan", params).then(function (data:Dynamic) {
+				pushResults(data);
+			});
+			#else
+			var data = cnx.sendRequest("Scan", params);
+			pushResults(data);
+			#end
+		}
+		doScan(null);
+		
+		#if js
+		return p;
+		#else
+		return result;
+		#end
+	}
+	
+	public function batchGetAll (params:Dynamic): #if js promhx.Promise<Array<Dynamic>> #else Array<Dynamic> #end {
+		//TODO exponential backoff
+		var results = new Array<Dynamic>();
+		#if js
+		var d = new promhx.Deferred<Array<Dynamic>>();
+		var p = d.promise();
+		#end
+		
+		function doBatchGet () {
+			function pushResults (data:Dynamic) {
+				for (i in Reflect.fields(data.Responses)) {
+					for (o in cast(Reflect.field(data.Responses, i), Array<Dynamic>)) {
+						results.push(o);
+					}
+				}
+				
+				if (Reflect.fields(data.UnprocessedKeys).length > 0) {
+					params.RequestItems = data.UnprocessedKeys;
+					doBatchGet();
+				} else {
+					#if js
+					d.resolve(results);
+					#end
+				}
+			}
+			#if js
+			cnx.sendRequest("BatchGetItem", params).then(function (data:Dynamic) {
+				pushResults(data);
+			});
+			#else
+			var data = cnx.sendRequest("BatchGetItem", params);
+			pushResults(data);
+			#end
+		}
+		doBatchGet();
+		
+		#if js
+		return p;
+		#else
+		return results;
 		#end
 	}
 	#end
