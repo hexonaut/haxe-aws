@@ -849,7 +849,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 				params.ExclusiveStartKey = { };
 				
 				//Set hash
-				var hashKeyName = Reflect.field(params.KeyConditions, Reflect.fields(params.KeyConditions)[0]);
+				var hashKeyName = Reflect.fields(params.KeyConditions)[0];
 				var hashKeyVal = Reflect.field(params.KeyConditions, hashKeyName).AttributeValueList[0];
 				Reflect.setField(params.ExclusiveStartKey, hashKeyName, hashKeyVal);
 				
