@@ -247,14 +247,18 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		}
 		
 		function mapResults (result:Dynamic):List<T> {
-			var items = result;
+			var items:Array<Dynamic> = result;
 			if (!Std.is(items, Array)) {
 				items = result.Items;
 				if (items == null) {
 					items = Reflect.field(result.Responses, getTableName());
 				}
 			}
-			return Lambda.map(items, function (e) { return buildSpodObject(e); } );
+			var list = new List<T>();
+			for (i in items) {
+				list.add(buildSpodObject(i));
+			}
+			return list;
 		}
 		
 		Reflect.setField(query, "TableName", getTableName());
