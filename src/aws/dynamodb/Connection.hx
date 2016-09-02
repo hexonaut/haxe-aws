@@ -140,7 +140,7 @@ class Connection {
 			if (type == i) throw Type.createEnum(DynamoDBException, i);
 		}
 		
-		throw "Error: " + type + "\nMessage: " + message;
+		throw "Error: " + type + "\nMessage: " + message + "\nPayload: " + payload;
 	}
 	
 	public function sendRequest (operation:String, payload:Dynamic): #if js promhx.Promise<Dynamic> #else Dynamic #end {

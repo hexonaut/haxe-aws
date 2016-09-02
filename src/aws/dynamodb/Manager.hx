@@ -483,7 +483,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 	}
 	
 	public function doUpdate (obj:T): #if js promhx.Promise<T> #else Void #end {
-		return doConditionalUpdate (obj, null);
+		return doConditionalUpdate(obj, null);
 	}
 	
 	function convertUpdateFieldsToExpr (fields:Dynamic, attribValues:Dynamic, attribNames:Dynamic):String {
@@ -516,12 +516,12 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 			}
 		}
 		
-		var str = "";
-		if (sets.length > 0) str += 'SET ${sets.join(", ")} ';
-		if (adds.length > 0) str += 'ADD ${adds.join(", ")} ';
-		if (deletes.length > 0) str += 'DELETE ${deletes.join(", ")} ';
-		if (removes.length > 0) str += 'REMOVE ${removes.join(", ")} ';
-		return str;
+		var all = new Array<String>();
+		if (sets.length > 0) all.push('SET ${sets.join(", ")}');
+		if (adds.length > 0) all.push('ADD ${adds.join(", ")}');
+		if (deletes.length > 0) all.push('DELETE ${deletes.join(", ")}');
+		if (removes.length > 0) all.push('REMOVE ${removes.join(", ")}');
+		return all.join(" ");
 	}
 	
 	public function doConditionalUpdate (obj:T, ?condition: { attribNames:Dynamic, attribValues:Dynamic, expr:Dynamic }): #if js promhx.Promise<T> #else Void #end {
@@ -983,6 +983,47 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		return p;
 		#else
 		return results;
+		#end
+	}
+	
+	public function batchWriteAll (objs:Array<T>): #if js promhx.Promise<Dynamic> #else Void #end {
+		//TODO exponential backoff
+		#if js
+		var d = new promhx.Deferred<Dynamic>();
+		var p = d.promise();
+		#end
+		
+		//Build params
+		var reqItems:Dynamic = {};
+		Reflect.setField(reqItems, getTableName(), objs.map(function (e) { return { PutRequest: { Item:buildFields(e) } }; }));
+		var params:Dynamic = {
+			RequestItems: reqItems
+		}
+		
+		function doBatchWrite () {
+			function pushResults (data:Dynamic) {
+				if (Reflect.fields(data.UnprocessedKeys).length > 0) {
+					params.RequestItems = data.UnprocessedItems;
+					doBatchWrite();
+				} else {
+					#if js
+					d.resolve(null);
+					#end
+				}
+			}
+			#if js
+			cnx.sendRequest("BatchWriteItem", params).then(function (data:Dynamic) {
+				pushResults(data);
+			});
+			#else
+			var data = cnx.sendRequest("BatchWriteItem", params);
+			pushResults(data);
+			#end
+		}
+		doBatchWrite();
+		
+		#if js
+		return p;
 		#end
 	}
 	#end
