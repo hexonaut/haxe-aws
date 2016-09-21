@@ -4,8 +4,8 @@
   "tags": ["cross"],
   "description": "A Haxe library for communicating with the Amazon AWS (http://www.amazonaws.com) backend.",
   "contributors": ["Blank101"],
-  "releasenote": "When searching without a limit be sure to get all results.",
-  "version": "0.4.0",
+  "releasenote": "Switched from promhx to js.Promise.",
+  "version": "0.5.0",
   "url": "https://github.com/Blank101/haxe-aws",
   "dependencies": {
 
