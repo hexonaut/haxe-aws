@@ -143,7 +143,7 @@ class Connection {
 		throw "Error: " + type + "\nMessage: " + message + "\nPayload: " + payload;
 	}
 	
-	public function sendRequest (operation:String, payload:Dynamic): #if js promhx.Promise<Dynamic> #else Dynamic #end {
+	public function sendRequest (operation:String, payload:Dynamic): #if js js.Promise<Dynamic> #else Dynamic #end {
 		if (!connected) connect();
 		
 		var conn = new Sig4Http((config.ssl ? "https" : "http") + "://" + config.host + "/", config);
@@ -154,26 +154,25 @@ class Connection {
 		conn.setPostData(payloadStr);
 		
 		#if js
-		var d = new promhx.Deferred<Dynamic>();
-		var p = d.promise();
-		conn.onData = function (_data:String) {
-			d.resolve(Json.parse(_data));
-		};
-		conn.onError = function (err:String) {
-			try {
-				var out = Json.parse(conn.responseData);
+		return new js.Promise(function (resolve, reject) {
+			conn.onData = function (_data:String) {
+				resolve(Json.parse(_data));
+			};
+			conn.onError = function (err:String) {
 				try {
-					formatError(Std.parseInt(err.substr(err.indexOf("#") + 1)), out.__type, out.message, payloadStr);
+					var out = Json.parse(conn.responseData);
+					try {
+						formatError(Std.parseInt(err.substr(err.indexOf("#") + 1)), out.__type, out.message, payloadStr);
+					} catch (e:Dynamic) {
+						reject(e);
+					}
 				} catch (e:Dynamic) {
-					p.reject(e);
+					reject(ConnectionInterrupted);
 				}
-			} catch (e:Dynamic) {
-				p.reject(ConnectionInterrupted);
-			}
-		};
-		conn.applySigning(true);
-		conn.request(true);
-		return p;
+			};
+			conn.applySigning(true);
+			conn.request(true);
+		});
 		#else
 		var err = null;
 		conn.onError = function (msg:String):Void {

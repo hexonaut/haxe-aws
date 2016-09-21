@@ -47,7 +47,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 	}
 	
 	#if !macro
-	public function all (?consistent:Bool):#if js promhx.Promise<List<T>> #else List<T> #end {
+	public function all (?consistent:Bool):#if js js.Promise<List<T>> #else List<T> #end {
 		#if js
 		return scanAll({
 			TableName: getTableName(),
@@ -208,14 +208,14 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		return str;
 	}
 	
-	public function unsafeGet (id:Dynamic, ?consistent:Bool = false): #if js promhx.Promise<T> #else T #end {
+	public function unsafeGet (id:Dynamic, ?consistent:Bool = false): #if js js.Promise<T> #else T #end {
 		var infos = getInfos();
 		var keys:Dynamic = { };
 		Reflect.setField(keys, infos.primaryIndex.hash, id);
 		return unsafeGetWithKeys(keys, consistent);
 	}
 	
-	public function unsafeGetWithKeys (keys:Dynamic, ?consistent:Bool = false): #if js promhx.Promise<T> #else T #end {
+	public function unsafeGetWithKeys (keys:Dynamic, ?consistent:Bool = false): #if js js.Promise<T> #else T #end {
 		var dynkeys:Dynamic = { };
 		for (i in Reflect.fields(keys)) {
 			Reflect.setField(dynkeys, i, haxeToDynamo(i, Reflect.field(keys, i)));
@@ -237,7 +237,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		#end
 	}
 	
-	public function unsafeObjects (query:Dynamic, ?consistent:Bool = false): #if js promhx.Promise<List<T>> #else List<T> #end {
+	public function unsafeObjects (query:Dynamic, ?consistent:Bool = false): #if js js.Promise<List<T>> #else List<T> #end {
 		//Check if start key is null
 		var startKey = Reflect.field(query, "ExclusiveStartKey");
 		if (startKey != null) {
@@ -297,14 +297,14 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		}
 		
 		#if js
-		return queryAll(query).pipe(function (result) {
+		return queryAll(query).then(function (result) {
 			var batchGetQuery = checkTableMapping(result);
 			if (batchGetQuery != null) {
 				return batchGetAll(batchGetQuery).then(function (result) {
 					return mapResults(result);
 				});
 			} else {
-				return promhx.Promise.promise(mapResults(result));
+				return js.Promise.resolve(mapResults(result));
 			}
 		});
 		#else
@@ -454,7 +454,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		return fields;
 	}
 	
-	public function doInsert (obj:T): #if js promhx.Promise<T> #else Void #end {
+	public function doInsert (obj:T): #if js js.Promise<T> #else Void #end {
 		var infos = getInfos();
 		checkKeyExists(obj, infos.primaryIndex);
 		var item = buildFields(obj);
@@ -482,7 +482,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		#end
 	}
 	
-	public function doUpdate (obj:T): #if js promhx.Promise<T> #else Void #end {
+	public function doUpdate (obj:T): #if js js.Promise<T> #else Void #end {
 		return doConditionalUpdate(obj, null);
 	}
 	
@@ -524,7 +524,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		return all.join(" ");
 	}
 	
-	public function doConditionalUpdate (obj:T, ?condition: { attribNames:Dynamic, attribValues:Dynamic, expr:Dynamic }): #if js promhx.Promise<T> #else Void #end {
+	public function doConditionalUpdate (obj:T, ?condition: { attribNames:Dynamic, attribValues:Dynamic, expr:Dynamic }): #if js js.Promise<T> #else Void #end {
 		var infos = getInfos();
 		checkKeyExists(obj, infos.primaryIndex);
 		
@@ -535,7 +535,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		var updateFields = buildUpdateFields(obj);
 		if (Reflect.fields(updateFields).length == 0) {
 			#if js
-			return promhx.Promise.promise(obj);
+			return js.Promise.resolve(obj);
 			#else
 			return;
 			#end
@@ -564,7 +564,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		}
 		var objLast = Reflect.field(obj, "__last");
 		#if js
-		if (objLast == null) return promhx.Promise.error("Object not in database.");
+		if (objLast == null) return js.Promise.reject("Object not in database.");
 		#else
 		if (objLast == null) throw "Object not in database.";
 		#end
@@ -582,13 +582,13 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		
 		return result.then(function (_) {
 			return obj;
-		}).errorPipe(function (err:Dynamic) {
+		}).catchError(function (err:Dynamic) {
 			//Reset update fields
 			for (i in Reflect.fields(updateFields)) {
 				Reflect.setField(Reflect.field(obj, "__last"), i, dynamoToHaxe(i, haxeToDynamo(i, Reflect.field(oldLast, i))));
 			}
 			
-			return promhx.Promise.error(err);
+			return js.Promise.reject(err);
 		});
 		#else
 		for (i in Reflect.fields(updateFields)) {
@@ -597,7 +597,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		#end
 	}
 	
-	public function doPut (obj:T): #if js promhx.Promise<T> #else Void #end {
+	public function doPut (obj:T): #if js js.Promise<T> #else Void #end {
 		var infos = getInfos();
 		checkKeyExists(obj, infos.primaryIndex);
 		
@@ -612,7 +612,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		#end
 	}
 	
-	public function doDelete (obj:T): #if js promhx.Promise<T> #else Void #end {
+	public function doDelete (obj:T): #if js js.Promise<T> #else Void #end {
 		var infos = getInfos();
 		checkKeyExists(obj, infos.primaryIndex);
 		
@@ -701,7 +701,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		return s.toString();
 	}
 	
-	public function createTable (?shardDate:Date): #if js promhx.Promise<Dynamic> #else Void #end {
+	public function createTable (?shardDate:Date): #if js js.Promise<Dynamic> #else Void #end {
 		var infos = getInfos();
 		
 		var attrFields = new Array<String>();
@@ -788,7 +788,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		#end
 	}
 	
-	public function deleteTable (?shardDate:Date): #if js promhx.Promise<Dynamic> #else Void #end {
+	public function deleteTable (?shardDate:Date): #if js js.Promise<Dynamic> #else Void #end {
 		var result = cnx.sendRequest("DeleteTable", { TableName:getTableName(shardDate) } );
 		#if js
 		return result.then(function (_) {
@@ -797,11 +797,11 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		#end
 	}
 	
-	public function tableExists (?shardDate:Date): #if js promhx.Promise<Bool> #else Bool #end {
+	public function tableExists (?shardDate:Date): #if js js.Promise<Bool> #else Bool #end {
 		#if js
 		return cast cnx.sendRequest("DescribeTable", { TableName:getTableName(shardDate) } ).then(function (_) {
 			return true;
-		}).errorThen(function (_) {
+		}).catchError(function (_) {
 			return false;
 		});
 		#else
@@ -828,7 +828,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 	/**
 	 * Run the query to completion.
 	 */
-	public function queryAll (params:Dynamic): #if js promhx.Promise<Array<Dynamic>> #else Array<Dynamic> #end {
+	public function queryAll (params:Dynamic): #if js js.Promise<Array<Dynamic>> #else Array<Dynamic> #end {
 		var rangeKeyName = getInfos().primaryIndex.range;
 		if (rangeKeyName == null) {
 			//Just forward to the query
@@ -845,8 +845,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		//TODO exponential backoff
 		var result = new Array<Dynamic>();
 		#if js
-		var d = new promhx.Deferred<Array<Dynamic>>();
-		var p = d.promise();
+		return new js.Promise(function (resolve, reject) {
 		#end
 		function doQuery (?exclStartKey:String) {
 			if (exclStartKey != null) {
@@ -871,7 +870,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 					doQuery(Reflect.field(Reflect.field(data.LastEvaluatedKey, rangeKeyName), rangeKeyType));
 				} else {
 					#if js
-					d.resolve(result);
+					resolve(result);
 					#end
 				}
 			}
@@ -887,21 +886,20 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		doQuery(null);
 		
 		#if js
-		return p;
+		});
 		#else
 		return result;
 		#end
 	}
 	
-	public function scanAll (params:Dynamic): #if js promhx.Promise<Array<Dynamic>> #else Array<Dynamic> #end {
+	public function scanAll (params:Dynamic): #if js js.Promise<Array<Dynamic>> #else Array<Dynamic> #end {
 		var hashKeyName = getInfos().primaryIndex.hash;
 		var hashKeyType = recordTypeToDynamoType(getFieldType(hashKeyName));
 		
 		//TODO exponential backoff
 		var result = new Array<Dynamic>();
 		#if js
-		var d = new promhx.Deferred<Array<Dynamic>>();
-		var p = d.promise();
+		return new js.Promise(function (resolve, reject) {
 		#end
 		function doScan (?exclStartKey:String) {
 			if (exclStartKey != null) {
@@ -921,7 +919,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 					doScan(Reflect.field(Reflect.field(data.LastEvaluatedKey, hashKeyName), hashKeyType));
 				} else {
 					#if js
-					d.resolve(result);
+					resolve(result);
 					#end
 				}
 			}
@@ -937,18 +935,17 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		doScan(null);
 		
 		#if js
-		return p;
+		});
 		#else
 		return result;
 		#end
 	}
 	
-	public function batchGetAll (params:Dynamic): #if js promhx.Promise<Array<Dynamic>> #else Array<Dynamic> #end {
+	public function batchGetAll (params:Dynamic): #if js js.Promise<Array<Dynamic>> #else Array<Dynamic> #end {
 		//TODO exponential backoff
 		var results = new Array<Dynamic>();
 		#if js
-		var d = new promhx.Deferred<Array<Dynamic>>();
-		var p = d.promise();
+		return new js.Promise(function (resolve, reject) {
 		#end
 		
 		function doBatchGet () {
@@ -964,7 +961,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 					doBatchGet();
 				} else {
 					#if js
-					d.resolve(results);
+					resolve(results);
 					#end
 				}
 			}
@@ -980,17 +977,16 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		doBatchGet();
 		
 		#if js
-		return p;
+		});
 		#else
 		return results;
 		#end
 	}
 	
-	public function batchWriteAll (objs:Array<T>): #if js promhx.Promise<Dynamic> #else Void #end {
+	public function batchWriteAll (objs:Array<T>): #if js js.Promise<Dynamic> #else Void #end {
 		//TODO exponential backoff
 		#if js
-		var d = new promhx.Deferred<Dynamic>();
-		var p = d.promise();
+		return new js.Promise(function (resolve, reject) {
 		#end
 		
 		//Build params
@@ -1007,7 +1003,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 					doBatchWrite();
 				} else {
 					#if js
-					d.resolve(null);
+					resolve(null);
 					#end
 				}
 			}
@@ -1023,7 +1019,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		doBatchWrite();
 		
 		#if js
-		return p;
+		});
 		#end
 	}
 	#end
