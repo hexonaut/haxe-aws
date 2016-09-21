@@ -47,7 +47,7 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 	}
 	
 	#if !macro
-	public macro function all (?consistant:Bool):#if js promhx.Promise<List<T>> #else List<T> #end {
+	public function all (?consistent:Bool):#if js promhx.Promise<List<T>> #else List<T> #end {
 		#if js
 		return scanAll({
 			TableName: getTableName(),
