@@ -143,9 +143,7 @@ class Connection {
 		throw "Error: " + type + "\nMessage: " + message + "\nPayload: " + payload;
 	}
 	
-	public function sendRequest (operation:String, payload:Dynamic): #if js js.Promise<Dynamic> #else Dynamic #end {
-		if (!connected) connect();
-		
+	function _sendRequest (operation:String, payload:Dynamic): #if js js.Promise<Dynamic> #else Dynamic #end {
 		var conn = new Sig4Http((config.ssl ? "https" : "http") + "://" + config.host + "/", config);
 		conn.setHeader("content-type", "application/x-amz-json-1.0; charset=utf-8");
 		conn.setHeader("x-amz-target", SERVICE + "_" + API_VERSION + "." + operation);
@@ -190,6 +188,50 @@ class Connection {
 		}
 		if (err != null) formatError(Std.parseInt(err.substr(err.indexOf("#") + 1)), out.__type, out.message, payloadStr);
 		return out;
+		#end
+	}
+	
+	public function sendRequest (operation:String, payload:Dynamic): #if js js.Promise<Dynamic> #else Dynamic #end {
+		if (!connected) connect();
+		
+		#if js
+		var delay = 0;
+		function doReq ():js.Promise<Dynamic> {
+			return _sendRequest(operation, payload).then(function (res:Dynamic) {
+				return res;
+			}).catchError(function (e:Dynamic) {
+				if (Std.is(e, DynamoDBException)) {
+					return new js.Promise(function (resolve, reject) {
+						haxe.Timer.delay(function () {
+							doReq().then(function (res:Dynamic) {
+								resolve(res);
+							}).catchError(function (e:Dynamic) {
+								reject(e);
+							});
+						}, (1 << delay) * 1000);
+						delay++;
+					});
+				} else {
+					return js.Promise.reject(e);
+				}
+			});
+		}
+		return doReq();
+		#else
+		var res = null;
+		var delay = 0;
+		while (true) {
+			try {
+				res = _sendRequest(operation, payload);
+			} catch (e:Dynamic) {
+				if (!Std.is(e, DynamoDBException)) {
+					throw e;
+				}
+				Sys.sleep(1 << delay);
+				delay++;
+			}
+		}
+		return res;
 		#end
 	}
 	
