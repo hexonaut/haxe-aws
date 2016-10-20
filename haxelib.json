@@ -4,8 +4,8 @@
   "tags": ["cross"],
   "description": "A Haxe library for communicating with the Amazon AWS (http://www.amazonaws.com) backend.",
   "contributors": ["Blank101"],
-  "releasenote": "Add exponential backoff for queries that can be retried.",
-  "version": "0.6.0",
+  "releasenote": "Fix for batch writing more than 25 items.",
+  "version": "0.6.1",
   "url": "https://github.com/Blank101/haxe-aws",
   "dependencies": {
 

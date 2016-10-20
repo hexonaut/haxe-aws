@@ -983,7 +983,10 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		#end
 	}
 	
-	public function batchWriteAll (objs:Array<T>): #if js js.Promise<Dynamic> #else Void #end {
+	/**
+	 * Split up objects into groups of 25.
+	 */
+	function _batchWriteAll (objs:Array<T>): #if js js.Promise<Dynamic> #else Void #end {
 		//TODO exponential backoff
 		#if js
 		return new js.Promise(function (resolve, reject) {
@@ -1020,6 +1023,40 @@ class Manager<T: #if sys sys.db.Object #else aws.dynamodb.Object #end > {
 		
 		#if js
 		});
+		#end
+	}
+	
+	public function batchWriteAll (objs:Array<T>): #if js js.Promise<Dynamic> #else Void #end {
+		#if js
+		var proms = new Array<js.Promise<Dynamic>>();
+		#end
+		var batch = [];
+		for (i in objs) {
+			batch.push(i);
+			if (batch.length == 25) {
+				#if js
+				proms.push(
+				#end
+				_batchWriteAll(batch)
+				#if js
+				)
+				#end
+				;
+				batch = [];
+			}
+		}
+		if (batch.length > 0) {
+			#if js
+			proms.push(
+			#end
+			_batchWriteAll(batch)
+			#if js
+			)
+			#end
+			;
+		}
+		#if js
+		return js.Promise.all(proms);
 		#end
 	}
 	#end
